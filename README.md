@@ -2,7 +2,7 @@
 
 ## 此定制仓库
 
-本仓库为 Ailu 的个人改进分支，版本 `0.2.1`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪，以及从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
+本仓库为 Ailu 的个人改进分支，版本 `0.3.0`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪，以及从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
 
 上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。当前功能分支为 `feat/rednote-publishing`。
 

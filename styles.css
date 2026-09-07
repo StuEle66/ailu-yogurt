@@ -7266,3 +7266,13 @@ button.ailu-feishu-destination-tree-main:focus-visible {
     min-width: 104px;
   }
 }
+
+/* User-selected WeChat cover cropper. */
+.ailu-cover-crop-modal { width: min(760px, 92vw); }
+.ailu-cover-crop-canvas { display: block; width: 100%; aspect-ratio: 1800 / 766; margin: 16px 0; touch-action: none; cursor: grab; border-radius: 8px; }
+.ailu-cover-crop-canvas:active { cursor: grabbing; }
+.ailu-cover-crop-status { color: var(--text-muted); }
+.ailu-cover-crop-modal label { display: flex; align-items: center; gap: 12px; }
+.ailu-cover-crop-modal input[type="range"] { flex: 1; }
+.ailu-cover-crop-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.ailu-wechat-cover-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }

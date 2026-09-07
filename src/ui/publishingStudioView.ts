@@ -43,6 +43,7 @@ import {
   replaceFormulaSvgs,
 } from '../wechat/renderer';
 import { buildWeChatSnapshot } from '../wechat/snapshot';
+import { normalizeWeChatPublishingImages } from '../wechat/imageBindings';
 import type { WeChatAssetDraft, WeChatPreviewSnapshot } from '../wechat/types';
 import {
   createTemplateThemeDocument,
@@ -76,6 +77,8 @@ import {
 import { renderStudioChrome } from './studioChrome';
 import { brandAiluWorkspaceTab, restoreWorkspaceTabIcon } from './ailuBrandMark';
 import { buildWeChatCoverPreviewModel } from './wechatCoverPreview';
+import { WeChatCoverCropModal } from './wechatCoverCropModal';
+import { captureWeChatCoverTarget, saveWeChatCover, restoreWeChatBodyFirstCover } from './wechatCoverAttachment';
 import {
   attentionPublishingTargetActivity,
   IDLE_PUBLISHING_TARGET_ACTIVITY,
@@ -148,6 +151,8 @@ export class PublishingStudioView extends ItemView {
   private preparedKey = '';
   private preparedRenderedHtml = '';
   private articleEl: HTMLElement | null = null;
+  private articleImageBindings: ReadonlyMap<string, string> = new Map();
+  private coverEditing = false;
   private loading = false;
   private operation: Operation = null;
   private error: string | null = null;
@@ -727,6 +732,7 @@ export class PublishingStudioView extends ItemView {
     this.capturePreviewScrollBeforeRender();
     const version = ++this.renderVersion;
     const root = this.contentEl;
+    this.articleImageBindings = new Map();
     root.empty();
     root.addClass('ailu-view', 'ailu-publishing-view');
 
@@ -842,11 +848,12 @@ export class PublishingStudioView extends ItemView {
       const article = canvas.createDiv({ cls: 'ailu-publishing-article' });
       this.articleEl = article;
       try {
-        await renderWeChatArticle(this.app, this, this.snapshot, article, {
+        const renderedImages = await renderWeChatArticle(this.app, this, this.snapshot, article, {
           themeDocument: this.themeDocument,
           typography: this.currentTypography(),
         });
         if (version !== this.renderVersion || !scroll.isConnected) return;
+        this.articleImageBindings = renderedImages.imageBindings;
         this.installPreviewSourceTracking(scroll, article, version);
       } catch (error) {
         if (version !== this.renderVersion) return;
@@ -1039,6 +1046,73 @@ export class PublishingStudioView extends ItemView {
     const body = card.createDiv({ cls: 'ailu-wechat-cover-body' });
     body.createDiv({ cls: 'ailu-wechat-cover-title', text: model.title });
     body.createDiv({ cls: 'ailu-wechat-cover-summary', text: model.summary });
+    const actions = body.createDiv({ cls: 'ailu-wechat-cover-actions' });
+    const choose = actions.createEl('button', {
+      text: model.source === 'explicit' ? '重新选择' : '选择封面',
+      attr: { type: 'button' },
+    });
+    choose.disabled = this.coverEditing || Boolean(this.operation);
+    const sourceFile = this.file;
+    choose.onclick = () => { if (sourceFile) void this.chooseWeChatCover(sourceFile); };
+    const metadata = sourceFile ? this.app.metadataCache.getFileCache(sourceFile)?.frontmatter : undefined;
+    if (model.source === 'explicit' && metadata && Object.hasOwn(metadata, 'wechat_cover')) {
+      const hasLegacyCover = ['wechatCover', '公众号封面', 'cover', 'cover_image', 'coverImage', '封面']
+        .some(key => typeof metadata[key] === 'string' && Boolean(metadata[key].trim()));
+      const restore = actions.createEl('button', {
+        text: hasLegacyCover ? '移除所选封面' : '恢复正文首图', attr: { type: 'button' },
+      });
+      restore.disabled = this.coverEditing || Boolean(this.operation);
+      restore.onclick = () => { if (sourceFile) void this.restoreWeChatCover(sourceFile); };
+    }
+
+  }
+
+  private async chooseWeChatCover(file: TFile): Promise<void> {
+    if (this.coverEditing || this.operation) return;
+    this.coverEditing = true;
+    try {
+      // Capture before the system picker opens; later tab changes cannot retarget it.
+      const target = captureWeChatCoverTarget(this.app, file);
+      const selected = await new Promise<File | null>(resolve => {
+        const input = document.body.createEl('input');
+        input.type = 'file';
+        input.accept = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif';
+        input.hidden = true;
+        const finish = (value: File | null): void => { input.remove(); resolve(value); };
+        input.addEventListener('change', () => finish(input.files?.[0] ?? null), { once: true });
+        input.addEventListener('cancel', () => finish(null), { once: true });
+        input.click();
+      });
+      if (!selected) return;
+      await new Promise<void>(resolve => {
+        new WeChatCoverCropModal(this.app, selected, async jpeg => {
+          const result = await saveWeChatCover(this.app, target, jpeg);
+          new Notice(`封面已保存：${result.attachmentPath}`);
+          if (this.file === target.file && this.contentEl.isConnected) await this.reload();
+        }, resolve).open();
+      });
+    } catch (error) {
+      new Notice(userFacingErrorMessage(error, '封面选择失败，请重新选择图片。'));
+    } finally {
+      this.coverEditing = false;
+      if (this.contentEl.isConnected) await this.render();
+    }
+  }
+
+  private async restoreWeChatCover(file: TFile): Promise<void> {
+    if (this.coverEditing || this.operation) return;
+    this.coverEditing = true;
+    try {
+      const target = captureWeChatCoverTarget(this.app, file);
+      await restoreWeChatBodyFirstCover(this.app, target);
+      new Notice('已移除所选封面，旧封面文件已保留。');
+      if (this.file === target.file && this.contentEl.isConnected) await this.reload();
+    } catch (error) {
+      new Notice(userFacingErrorMessage(error, '恢复正文首图失败，请重试。'));
+    } finally {
+      this.coverEditing = false;
+      if (this.contentEl.isConnected) await this.render();
+    }
   }
 
   private wechatCoverPreviewUrl(asset: WeChatAssetDraft): string | null {
@@ -1380,6 +1454,10 @@ export class PublishingStudioView extends ItemView {
   }
 
   private reserveWeChatOperation(operation: Exclude<Operation, null>): boolean {
+    if (this.coverEditing) {
+      new Notice('请先完成或取消封面选择。');
+      return false;
+    }
     if (this.operation) {
       new Notice(this.operation === 'publishing'
         ? '公众号草稿正在上传并核验，请等待当前操作完成。'
@@ -1407,6 +1485,7 @@ export class PublishingStudioView extends ItemView {
     const sourceSnapshot = this.snapshot;
     const themeDocument = this.themeDocument;
     const articleEl = this.articleEl;
+    const imageBindings = this.articleImageBindings;
     const renderedHtml = articleEl.outerHTML;
     const key = this.currentPreparedKey();
     if (
@@ -1439,7 +1518,7 @@ export class PublishingStudioView extends ItemView {
           ],
         }
       : sourceSnapshot;
-    const prepared = await prepareSnapshotForPublishing(snapshot, rendered.innerHTML, {
+    const prepared = await prepareSnapshotForPublishing(snapshot, normalizeWeChatPublishingImages(rendered.innerHTML, imageBindings), {
       containerStyle: rendered.getAttribute('style') ?? '',
     });
     if (

@@ -304,6 +304,7 @@ function removeImage(image: HtmlElementNode): void {
 function removeCover(
   root: HtmlRootNode,
   cover: PublishingImageInput,
+  source: 'explicit' | 'body-first',
 ): { removed: boolean; reason: 'matched-cover' | 'first-image-before-heading' | 'not-present' } {
   const images = elements(root, new Set(['img']));
   const matched = images.find(image => imageMatches(image, cover));
@@ -311,6 +312,7 @@ function removeCover(
     removeImage(matched);
     return { removed: true, reason: 'matched-cover' };
   }
+  if (source === 'explicit') return { removed: false, reason: 'not-present' };
   const firstImage = images[0];
   if (!firstImage) return { removed: false, reason: 'not-present' };
   const firstHeading = elements(root, new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']))[0];
@@ -758,7 +760,7 @@ export class PreparedArticleBuilder {
     const root = parseHtml(input.html);
     assertNoUnsupportedFormulaGraphics(root);
     removeForbiddenElements(root);
-    const coverRemoval = removeCover(root, input.cover);
+    const coverRemoval = removeCover(root, input.cover, input.coverSource ?? 'body-first');
     const removedTitle = removeTitle(root, title);
     unwrapListItemBlocks(root);
     applyFinalPublishingTextFlowGuards(root);

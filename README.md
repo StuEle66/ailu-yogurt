@@ -1,5 +1,15 @@
 # Ailu
 
+## 此定制仓库
+
+本仓库为 Ailu 的个人改进分支，版本 `0.2.1`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。本轮增加公众号受管预览图片的复制修复，以及独立封面选择、裁剪与恢复正文首图。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
+
+上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。开发分支为 `feat/wechat-media-workflow`。
+
+后续同步先执行 `git fetch upstream`，再用 `git log --oneline main..upstream/main` 与 `git diff main...upstream/main` 审查变化。确认同步范围后，在开发分支显式合并选定的上游提交并重新运行完整检查；不要直接重置有改动的分支。完成并验证的项目改动按根目录 `AGENTS.md` 提交并推送到 `origin`。
+
+本地构建使用 `npm ci`、`npm run check` 与 `npm run audit:dependencies`。公开清单登记完成并审核源码后，暂存审核文件以满足上游发行校验器的 Git 索引一致性要求；不要跳过校验。构建产物留在仓库，按下文部署流程先验收测试 Vault，备份后再安装日常 Vault。
+
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
 ![Commercial use: permitted under AGPL](https://img.shields.io/badge/commercial_use-permitted_under_AGPL-2ea44f.svg)
 ![Commercial support: available](https://img.shields.io/badge/commercial_support-available-7c3aed.svg)

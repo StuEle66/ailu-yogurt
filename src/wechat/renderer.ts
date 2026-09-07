@@ -7,6 +7,7 @@ import {
 } from '../utils/previewSecurity';
 
 import type { WeChatAssetDraft, WeChatPreviewSnapshot } from './types';
+import { readonlyImageBindings, type WeChatArticleRenderResult } from './imageBindings';
 import {
   instrumentPublishingMarkdown,
   materializePublishingSourceMarkers,
@@ -745,7 +746,7 @@ export async function renderWeChatArticle(
     themeDocument?: WeChatThemeDocument | null;
     typography?: WeChatTypographyPreferences;
   } = {},
-): Promise<void> {
+): Promise<WeChatArticleRenderResult> {
   container.empty();
   const previewUrls = beginWeChatPreviewUrls(component);
   container.classList.remove(
@@ -774,8 +775,10 @@ export async function renderWeChatArticle(
           ? 'ailu-wechat-extracted-design-article'
           : 'ailu-wechat-paper-ink-article',
   );
+  let replacements: Map<string, string>;
   try {
-    const markdown = replaceAssetTokens(snapshot.markdown, snapshotAssetMap(snapshot, previewUrls));
+    replacements = snapshotAssetMap(snapshot, previewUrls);
+    const markdown = replaceAssetTokens(snapshot.markdown, replacements);
     await MarkdownRenderer.render(
       app,
       instrumentPublishingMarkdown(
@@ -797,6 +800,9 @@ export async function renderWeChatArticle(
     applyExtractedDesignWechatStyles(container, templateThemeId);
   } else applyPaperInkWechatStyles(container);
   if (options.typography) applyWeChatTypography(container, options.typography);
+  return Object.freeze({
+    imageBindings: readonlyImageBindings([...replacements].map(([token, url]) => [url, token])),
+  });
 }
 
 function imageFromUrl(url: string): Promise<HTMLImageElement> {

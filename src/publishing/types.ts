@@ -88,6 +88,7 @@ export interface PreparedArticleBuildInput {
   containerStyle?: string;
   html: string;
   cover: PublishingImageInput;
+  coverSource?: 'explicit' | 'body-first';
   images: readonly PublishingImageInput[];
   now?: () => Date;
 }

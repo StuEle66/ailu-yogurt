@@ -258,6 +258,7 @@ function hashSnapshot(snapshot: Omit<WeChatPreviewSnapshot, 'contentHash'>): str
     onlyFansCanComment: snapshot.onlyFansCanComment,
     markdown: snapshot.markdown,
     assets: snapshot.assets.map((asset) => asset.contentHash).sort(),
+    coverAssetToken: snapshot.coverAssetToken,
     rendererVersion: snapshot.rendererVersion,
   }));
 }

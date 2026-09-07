@@ -40,6 +40,18 @@ function snapshot(assets: WeChatAssetDraft[], coverAssetToken: string): WeChatPr
 }
 
 describe('prepareSnapshotForPublishing', () => {
+  test('an independent cover preserves the first body photo before any heading', async () => {
+    const assets = [
+      asset('cover-token', 'c'.repeat(64), 'cover.jpg', 'cover.jpg', 'image/jpeg', onePixelJpeg()),
+      asset('body-token', 'd'.repeat(64), 'body.png', 'body.png', 'image/png', onePixelPng()),
+    ];
+    const article = await prepareSnapshotForPublishing(snapshot(assets, 'cover-token'),
+      '<p><img src="body-token"></p><h2>正文</h2><p>图片说明</p>');
+    expect(article.stats.imageCount).toBe(1);
+    expect(article.stats.removedCover).toBe(false);
+    expect(article.images[0].id).toBe('body-token');
+  });
+
   test('uploads byte-identical files once while preserving every body occurrence', async () => {
     const coverHash = 'c'.repeat(64);
     const duplicateHash = 'd'.repeat(64);

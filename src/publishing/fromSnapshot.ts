@@ -27,6 +27,7 @@ export async function prepareSnapshotForPublishing(
     containerStyle: options.containerStyle,
     html: renderedHtml,
     cover: publishingImage(coverAsset),
+    coverSource: snapshot.coverAssetToken ? 'explicit' : 'body-first',
     images: mergePublishingImages(snapshot.assets),
   });
 }

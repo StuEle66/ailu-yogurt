@@ -59,8 +59,8 @@ function assertAllowedSensitivePath(relativePath) {
     || (base.startsWith('.env.') && base !== '.env.example')
     || /\.(?:pem|key|p12|pfx|sqlite(?:-.*)?|db|log)$/i.test(base)
     || /(?:^|[-_.])cookies?(?:[-_.]|$)/i.test(base)
+    || (relativePath !== 'AGENTS.md' && lower.split('/').includes('agents.md'))
     || relativePath.split('/').some(part => [
-      'AGENTS.md',
       'HEARTBEAT.md',
       'IDENTITY.md',
       'MEMORY.md',

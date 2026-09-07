@@ -27,6 +27,21 @@ describe('WeChat snapshot remote images', () => {
     vi.clearAllMocks();
   });
 
+  test('choosing an existing body image as explicit cover changes the snapshot version', async () => {
+    vi.mocked(buildShareSnapshot).mockResolvedValue({
+      title: 'Cover change', markdown: `![](${CDN_IMAGE_URL})`, contentHash: 'share-hash', assets: [], warnings: [],
+    });
+    vi.mocked(fetchRemoteImageBytes).mockResolvedValue({ body: Buffer.from(PNG_BYTES), finalUrl: CDN_IMAGE_URL });
+    const frontmatter: Record<string, unknown> = {};
+    const app = { metadataCache: { getFileCache: () => ({ frontmatter }) } } as unknown as App;
+    const file = new TFile(); file.path = 'article.md';
+    const original = await buildWeChatSnapshot(app, file);
+    frontmatter.wechat_cover = CDN_IMAGE_URL;
+    const changed = await buildWeChatSnapshot(app, file);
+    expect(changed.assets).toEqual(original.assets);
+    expect(changed.contentHash).not.toBe(original.contentHash);
+  });
+
   test('uses the Markdown filename ahead of frontmatter and shared snapshot titles', async () => {
     vi.mocked(buildShareSnapshot).mockResolvedValue({
       title: 'Shared snapshot title',

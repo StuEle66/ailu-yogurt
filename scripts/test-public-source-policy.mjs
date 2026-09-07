@@ -2,7 +2,48 @@ import {
   assertExactPublicInventory,
   assertExactGitIndexState,
   assertPublicText,
+  verifyPublicSourceTree,
 } from './public-source-policy.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+
+function verifyFixture(relativePath, content) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ailu-public-policy-'));
+  try {
+    const files = [relativePath, 'public-source-files.json', 'scripts/public-source-policy.mjs', 'scripts/test-public-source-policy.mjs']
+      .sort((left, right) => left.localeCompare(right));
+    fs.mkdirSync(path.join(root, 'scripts'));
+    fs.mkdirSync(path.dirname(path.join(root, relativePath)), { recursive: true });
+    fs.writeFileSync(path.join(root, relativePath), content);
+    fs.writeFileSync(path.join(root, 'public-source-files.json'), JSON.stringify({ schema_version: 1, files }));
+    for (const script of ['public-source-policy.mjs', 'test-public-source-policy.mjs']) {
+      fs.writeFileSync(path.join(root, 'scripts', script), '// Synthetic public policy fixture.\n');
+    }
+    execFileSync('git', ['init', '--quiet', root]);
+    execFileSync('git', ['add', '--all'], { cwd: root });
+    return verifyPublicSourceTree(root);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+verifyFixture('AGENTS.md', '# Public project rules\nPreserve licenses and test changes.\n');
+for (const nestedPath of ['docs/AGENTS.md', 'src/agents.md', 'agents.md']) {
+  expectFailure(
+    () => verifyFixture(nestedPath, '# Private workspace instructions\n'),
+    'Only the exact root AGENTS.md may enter the public tree.',
+  );
+}
+expectFailure(
+  () => verifyFixture('AGENTS.md', ['Local path: ', '', 'Users', 'private-user', 'Vault'].join('/')),
+  'Root AGENTS.md must still reject personal home paths.',
+);
+expectFailure(
+  () => verifyFixture('AGENTS.md', ['-----BEGIN', 'PRIVATE KEY-----'].join(' ')),
+  'Root AGENTS.md must still reject private-key material.',
+);
 
 function expectFailure(operation, message) {
   try {

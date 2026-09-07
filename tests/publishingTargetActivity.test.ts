@@ -63,6 +63,7 @@ describe('publishing target concurrency UI contract', () => {
     )?.[1] ?? '';
     expect(changeTargetBody).not.toContain('resetTargetPanels');
     expect(changeTargetBody).not.toContain('isCurrentTargetBusy');
+    expect(changeTargetBody).toContain('this.app.workspace.requestSaveLayout()');
   });
 
   it('routes background panel updates to badges without repainting an unrelated target', () => {

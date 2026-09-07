@@ -1359,9 +1359,10 @@ export class PublishingStudioView extends ItemView {
     this.target = target;
     if (target === 'wechat') {
       await this.reload();
-      return;
+    } else {
+      await this.render();
     }
-    await this.render();
+    void this.app.workspace.requestSaveLayout();
   }
 
   private ensureFeishuPanel(): FeishuPublishingPanel | null {

@@ -299,6 +299,10 @@ export class PublishingStudioView extends ItemView {
 
   async setFile(file: TFile): Promise<void> {
     if (file.extension !== 'md') return;
+    if (this.file?.path === file.path && this.target === 'rednote') {
+      await this.ensureRedNotePanel()?.refresh();
+      return;
+    }
     if (
       this.file?.path === file.path
       && (this.target !== 'wechat' || (this.snapshot && !this.sourceDirty))

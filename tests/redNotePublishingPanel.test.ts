@@ -4,12 +4,19 @@ vi.mock('obsidian', () => ({
 }));
 
 import { describe, expect, test, vi } from 'vitest';
+import fs from 'node:fs';
 import { PUBLISHING_TARGETS } from '../src/ui/publishingTargetActivity';
 
 describe('publishing target choices', () => {
   test('offers RedNote between WeChat and Feishu', () => {
     expect(PUBLISHING_TARGETS.map(target => target.label)).toEqual(['公众号', '小红书', '飞书', 'X 文章']);
   });
+});
+
+test('queues a final refresh instead of dropping an update received while rendering', () => {
+  const source = fs.readFileSync('src/ui/redNotePublishingPanel.ts', 'utf8');
+  expect(source).toContain('this.refreshRequested = true');
+  expect(source).toMatch(/const queued = this\.refreshRequested;[\s\S]*?void this\.refresh\(retry\);/);
 });
 
 

@@ -78,6 +78,14 @@ describe('publishing target concurrency UI contract', () => {
     );
   });
 
+  it('refreshes a restored RedNote panel when Obsidian finishes opening the same note', () => {
+    const setFileBody = publishingStudioSource.match(
+      /async setFile\(file: TFile\): Promise<void> \{([\s\S]*?)\n\s{2}\}/,
+    )?.[1] ?? '';
+    expect(setFileBody).toContain("this.target === 'rednote'");
+    expect(setFileBody).toContain('await this.ensureRedNotePanel()?.refresh()');
+  });
+
   it('keeps an accepted WeChat preflight valid when only the visible tab changes', () => {
     expect(publishingStudioSource).toContain(
       'this.preparedRenderedHtml === this.articleEl.outerHTML',

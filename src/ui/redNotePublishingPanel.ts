@@ -120,6 +120,8 @@ export class RedNotePublishingPanel {
   private content: RedNoteContent | null = null;
   private source = '';
   private busy = false;
+  private refreshRequested = false;
+  private retryImportRequested = false;
   private disposed = false;
   private started = false;
   private error = '';
@@ -149,7 +151,14 @@ export class RedNotePublishingPanel {
       : this.error ? attentionPublishingTargetActivity('图卡需要检查') : IDLE_PUBLISHING_TARGET_ACTIVITY;
   }
   activate(): void { if (!this.started && !this.busy && !this.disposed) void this.refresh(); }
-  dispose(): void { this.disposed = true; this.converter.dispose(); this.fontCleanup?.(); this.fontCleanup = null; }
+  dispose(): void {
+    this.disposed = true;
+    this.refreshRequested = false;
+    this.retryImportRequested = false;
+    this.converter.dispose();
+    this.fontCleanup?.();
+    this.fontCleanup = null;
+  }
 
   private assertSource(): void {
     if (this.disposed || this.deps.file.path !== this.sourcePath
@@ -159,7 +168,12 @@ export class RedNotePublishingPanel {
   }
 
   async refresh(retryImport = false): Promise<void> {
-    if (this.busy || this.disposed) return;
+    if (this.disposed) return;
+    if (this.busy) {
+      this.refreshRequested = true;
+      this.retryImportRequested ||= retryImport;
+      return;
+    }
     this.busy = true; this.started = true; this.error = '';
     this.deps.requestRender();
     try {
@@ -179,7 +193,15 @@ export class RedNotePublishingPanel {
       this.assertSource();
       this.source = source; this.content = content;
     } catch (error) { this.error = error instanceof Error ? error.message : '图卡生成失败。'; }
-    finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
+    finally {
+      this.busy = false;
+      const queued = this.refreshRequested;
+      const retry = this.retryImportRequested;
+      this.refreshRequested = false;
+      this.retryImportRequested = false;
+      if (!this.disposed && queued) void this.refresh(retry);
+      else if (!this.disposed) this.deps.requestRender();
+    }
   }
 
   private context() { return { app: this.deps.app, sourceFile: this.deps.file, title: this.deps.file.basename }; }

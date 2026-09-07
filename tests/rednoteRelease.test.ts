@@ -10,6 +10,13 @@ const fontArtifacts = [
 ];
 
 describe('offline Rednote release contract', () => {
+  test('keeps export controls clear of Obsidian status bar', () => {
+    const styles = fs.readFileSync('styles.css', 'utf8');
+    expect(styles).toMatch(
+      /\.ailu-rednote-panel\.ailu-rednote-scope\s*\{[^}]*padding-bottom:\s*56px;/,
+    );
+  });
+
   test('ships the unchanged MDFlow font files with their original OFL notices', () => {
     const hashes = [
       'b9d416b65858c92f31b4447d119bec2ef31c883f0764604f353c3a641f156dcb',

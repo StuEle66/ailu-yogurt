@@ -8587,4 +8587,20 @@ button.ailu-feishu-destination-tree-main:focus-visible {
 }
 
 }
+
+/* Keep the final export row above Obsidian's fixed status bar. */
+.ailu-rednote-panel.ailu-rednote-scope {
+  padding-bottom: 56px;
+}
+
+.ailu-rednote-panel-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ailu-rednote-panel-footer > details {
+  flex-basis: 100%;
+}
 /* END AILU REDNOTE STYLES */

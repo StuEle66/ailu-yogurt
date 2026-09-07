@@ -1074,6 +1074,10 @@ export function normalizeSettings(
   const feishuDestination = readFeishuDestination(value);
   return {
     schemaVersion: 1,
+    rednote: value?.rednote && typeof value.rednote === 'object' && !Array.isArray(value.rednote) ? value.rednote : {},
+    redNoteImport: value?.redNoteImport && ['pending', 'imported', 'skipped', 'failed'].includes(value.redNoteImport.status)
+      ? { status: value.redNoteImport.status, error: typeof value.redNoteImport.error === 'string' ? value.redNoteImport.error : '' }
+      : { status: 'pending', error: '' },
     ...agentSettings,
     systemPrompt: typeof value?.systemPrompt === 'string'
       ? value.systemPrompt

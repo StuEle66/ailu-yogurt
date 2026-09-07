@@ -1,3 +1,4 @@
+import type { RedNoteSettings } from './rednote/rednote/types';
 import type { WeChatThemeId } from './wechat/themes';
 import type { FeishuDestinationKind } from './feishu/destination';
 import {
@@ -343,7 +344,14 @@ export type LocalModelByAgent = Record<AgentId, string>;
 export type ReasoningEffortByAgent = Record<AgentId, string>;
 export type FullAccessByAgent = Record<AgentId, boolean>;
 
+export interface RedNoteImportState {
+  status: 'pending' | 'imported' | 'skipped' | 'failed';
+  error: string;
+}
+
 export interface AiluSettings {
+  rednote: Partial<RedNoteSettings>;
+  redNoteImport: RedNoteImportState;
   schemaVersion: 1;
   defaultAgentId: AgentId;
   configSources: ConfigSourcesByAgent;
@@ -420,6 +428,8 @@ export function normalizeFullAccessByAgent(
 }
 
 export const DEFAULT_SETTINGS: AiluSettings = {
+  rednote: {},
+  redNoteImport: { status: 'pending', error: '' },
   schemaVersion: 1,
   defaultAgentId: 'claude',
   configSources: DEFAULT_CONFIG_SOURCES,

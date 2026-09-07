@@ -60,6 +60,7 @@ import {
 } from '../wechat/typography';
 import { confirmDraftUpload } from './confirmDraftUploadModal';
 import { FeishuPublishingPanel } from './feishuPublishingPanel';
+import { RedNotePublishingPanel } from './redNotePublishingPanel';
 import { XPublishingPanel } from './xPublishingPanel';
 import type { XArticleUploadTaskCoordinator } from '../xArticle/uploadTaskCoordinator';
 import {
@@ -80,6 +81,7 @@ import { buildWeChatCoverPreviewModel } from './wechatCoverPreview';
 import { WeChatCoverCropModal } from './wechatCoverCropModal';
 import { captureWeChatCoverTarget, saveWeChatCover, restoreWeChatBodyFirstCover } from './wechatCoverAttachment';
 import {
+  PUBLISHING_TARGETS,
   attentionPublishingTargetActivity,
   IDLE_PUBLISHING_TARGET_ACTIVITY,
   publishingTargetAccessibleLabel,
@@ -166,6 +168,8 @@ export class PublishingStudioView extends ItemView {
   // Target changes only remount the visible surface. Panel instances stay
   // alive for the current file so an explicitly started remote task can
   // finish while the user prepares another destination.
+  private redNotePanel: RedNotePublishingPanel | null = null;
+  private redNotePanelFilePath = '';
   private feishuPanel: FeishuPublishingPanel | null = null;
   private feishuPanelFilePath = '';
   private xPanel: XPublishingPanel | null = null;
@@ -224,6 +228,7 @@ export class PublishingStudioView extends ItemView {
         if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
         this.refreshTimer = window.setTimeout(() => {
           this.refreshTimer = null;
+          if (this.redNotePanelFilePath === file.path) void this.redNotePanel?.refresh();
           if (this.feishuPanelFilePath === file.path) void this.feishuPanel?.refresh();
           if (this.xPanelFilePath === file.path) void this.xPanel?.refresh();
           if (this.target === 'wechat') void this.reload();
@@ -265,7 +270,7 @@ export class PublishingStudioView extends ItemView {
     state: Record<string, unknown>,
     result: ViewStateResult,
   ): Promise<void> {
-    const nextTarget: PublishingTarget = state.target === 'feishu'
+    const nextTarget: PublishingTarget = state.target === 'rednote' ? 'rednote' : state.target === 'feishu'
       ? 'feishu'
       : state.target === 'x'
         ? 'x'
@@ -316,6 +321,7 @@ export class PublishingStudioView extends ItemView {
   }
 
   async refresh(): Promise<void> {
+    if (this.target === 'rednote') { await this.ensureRedNotePanel()?.refresh(); return; }
     if (this.target === 'feishu') {
       const panel = this.ensureFeishuPanel();
       if (panel) await panel.refresh();
@@ -337,7 +343,8 @@ export class PublishingStudioView extends ItemView {
       this.loading = false;
       this.error = null;
       await this.render();
-      if (this.target === 'feishu') this.ensureFeishuPanel()?.activate();
+      if (this.target === 'rednote') this.ensureRedNotePanel()?.activate();
+      else if (this.target === 'feishu') this.ensureFeishuPanel()?.activate();
       else this.ensureXPanel()?.activate();
       return;
     }
@@ -764,6 +771,15 @@ export class PublishingStudioView extends ItemView {
     });
 
     this.renderTools(shell);
+    if (this.target === 'rednote') {
+      this.articleEl = null;
+      const panel = this.ensureRedNotePanel();
+      if (panel) {
+        await panel.render(shell);
+        if (version === this.renderVersion && shell.isConnected) panel.activate();
+      } else this.renderState(shell, 'file-text', '打开一篇 Markdown', '小红书图卡将跟随当前文章。', 'ailu-publishing-empty');
+      return;
+    }
     if (this.target === 'feishu') {
       this.articleEl = null;
       const panel = this.ensureFeishuPanel();
@@ -878,11 +894,7 @@ export class PublishingStudioView extends ItemView {
       attr: { role: 'tablist', 'aria-label': '草稿目标' },
     });
     this.targetButtonEls.clear();
-    for (const option of [
-      { id: 'wechat' as const, label: '公众号' },
-      { id: 'feishu' as const, label: '飞书' },
-      { id: 'x' as const, label: 'X 文章' },
-    ]) {
+    for (const option of PUBLISHING_TARGETS) {
       const button = targets.createEl('button', {
         cls: option.id === this.target ? 'is-active' : '',
         attr: {
@@ -901,6 +913,10 @@ export class PublishingStudioView extends ItemView {
       button.onclick = () => void this.changeTarget(option.id);
     }
     tools.createDiv({ cls: 'ailu-publishing-tool-divider' });
+    if (this.target === 'rednote') {
+      tools.createSpan({ text: '小红书图卡 · 本地导出' });
+      return;
+    }
     if (this.target === 'feishu') {
       tools.createSpan({
         cls: 'ailu-feishu-toolbar-state',
@@ -1255,12 +1271,14 @@ export class PublishingStudioView extends ItemView {
   }
 
   private isCurrentTargetBusy(): boolean {
+    if (this.target === 'rednote') return Boolean(this.redNotePanel?.isBusy());
     if (this.target === 'feishu') return Boolean(this.feishuPanel?.isBusy());
     if (this.target === 'x') return Boolean(this.xPanel?.isBusy());
     return Boolean(this.operation);
   }
 
   private targetActivity(target: PublishingTarget): PublishingTargetActivity {
+    if (target === 'rednote') return this.redNotePanel?.activity() ?? IDLE_PUBLISHING_TARGET_ACTIVITY;
     if (target === 'feishu') return this.feishuPanel?.activity() ?? IDLE_PUBLISHING_TARGET_ACTIVITY;
     if (target === 'x') return this.xPanel?.activity() ?? IDLE_PUBLISHING_TARGET_ACTIVITY;
     if (this.operation === 'publishing') return runningPublishingTargetActivity('正在上传草稿');
@@ -1294,6 +1312,7 @@ export class PublishingStudioView extends ItemView {
   private refreshTargetButtons(): void {
     const labels: Record<PublishingTarget, string> = {
       wechat: '公众号',
+      rednote: '小红书',
       feishu: '飞书',
       x: 'X 文章',
     };
@@ -1304,6 +1323,7 @@ export class PublishingStudioView extends ItemView {
 
   private isAnyTargetBusy(): boolean {
     return Boolean(this.operation)
+      || Boolean(this.redNotePanel?.isBusy())
       || Boolean(this.feishuPanel?.isBusy())
       || Boolean(this.xPanel?.isBusy());
   }
@@ -1311,6 +1331,7 @@ export class PublishingStudioView extends ItemView {
   private busyTargetLabels(): string[] {
     const labels: string[] = [];
     if (this.operation) labels.push('公众号');
+    if (this.redNotePanel?.isBusy()) labels.push('小红书');
     if (this.feishuPanel?.isBusy()) labels.push('飞书');
     if (this.xPanel?.isBusy()) labels.push('X 文章');
     return labels;
@@ -1397,7 +1418,24 @@ export class PublishingStudioView extends ItemView {
     this.xPanelFilePath = '';
   }
 
+  private ensureRedNotePanel(): RedNotePublishingPanel | null {
+    const file = this.file;
+    if (!file || this.target !== 'rednote') return null;
+    if (this.redNotePanel && this.redNotePanelFilePath === file.path) return this.redNotePanel;
+    this.redNotePanel?.dispose();
+    this.redNotePanelFilePath = file.path;
+    this.redNotePanel = new RedNotePublishingPanel({
+      app: this.app, file, getSettings: this.deps.getSettings, saveSettings: this.deps.saveSettings,
+      requestRender: () => this.handlePanelRenderRequest('rednote', file.path),
+      openSettings: this.deps.openSettings,
+    });
+    return this.redNotePanel;
+  }
+
   private resetTargetPanels(): void {
+    this.redNotePanel?.dispose();
+    this.redNotePanel = null;
+    this.redNotePanelFilePath = '';
     this.resetFeishuPanel();
     this.resetXPanel();
   }

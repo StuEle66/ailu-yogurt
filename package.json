@@ -13,7 +13,7 @@
     "build": "node scripts/build-release.mjs",
     "check": "npm test && npm run test:public-policy && npm run lint && npm run build && npm run verify:release",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=4",
     "test:public-policy": "node scripts/test-public-source-policy.mjs",
     "audit:dependencies": "npm audit --audit-level=high",
     "deploy:plan": "node scripts/deploy-ailu.mjs --mode plan",
@@ -52,7 +52,10 @@
     "vitest": "^4.0.14"
   },
   "dependencies": {
+    "@fontsource/ma-shan-zheng": "5.2.6",
     "entities": "^4.5.0",
+    "html-to-image": "1.11.13",
+    "jszip": "3.10.1",
     "qrcode": "^1.5.4"
   },
   "overrides": {

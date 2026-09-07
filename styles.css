@@ -7276,3 +7276,1315 @@ button.ailu-feishu-destination-tree-main:focus-visible {
 .ailu-cover-crop-modal input[type="range"] { flex: 1; }
 .ailu-cover-crop-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .ailu-wechat-cover-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* BEGIN AILU REDNOTE STYLES */
+/* Scoped migration: card selectors never apply outside Ailu RedNote. */
+.ailu-rednote-scope {
+/* MDFlow Publisher View Styles */
+
+.ailu-rednote-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+}
+
+.ailu-rednote-toolbar {
+  padding: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.ailu-rednote-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ailu-rednote-tab {
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.2s;
+}
+
+.ailu-rednote-tab:hover:not(.disabled) {
+  background: var(--background-modifier-hover);
+}
+
+.ailu-rednote-tab.active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.ailu-rednote-tab.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ailu-rednote-theme-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ailu-rednote-theme-select {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.ailu-rednote-rednote-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ailu-rednote-rednote-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.ailu-rednote-rednote-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 96px;
+}
+
+.ailu-rednote-rednote-control-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ailu-rednote-rednote-control-select,
+.ailu-rednote-rednote-control-input {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+.ailu-rednote-rednote-control-input {
+  width: 72px;
+}
+
+.ailu-rednote-rednote-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ailu-rednote-rednote-compact-action {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ailu-rednote-rednote-compact-action:hover {
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+.ailu-rednote-preview-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--background-primary);
+}
+
+.ailu-rednote-preview {
+  max-width: 740px;
+  margin: 0 auto;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ailu-rednote-preview[data-platform="x"] {
+  background: var(--background-primary);
+  box-shadow: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.ailu-rednote-preview[data-platform="rednote"] {
+  background: var(--background-primary);
+  box-shadow: none;
+  max-width: 100%;
+  padding: 0;
+}
+
+.ailu-rednote-placeholder {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 60px 20px;
+  font-size: 14px;
+}
+
+.ailu-rednote-export-btn {
+  padding: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.ailu-rednote-export-btn button {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.ailu-rednote-preview-wrapper {
+  position: relative;
+  padding: 10px 0 8px;
+}
+
+.ailu-rednote-preview-container {
+  position: relative;
+  min-width: 490px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: transparent;
+  border-radius: 12px;
+  padding: 8px 0 16px;
+}
+
+.ailu-rednote-image-preview {
+  width: 100%;
+  max-width: 450px;
+  aspect-ratio: 3 / 4;
+  border-radius: 22px;
+  box-shadow: var(--rn-frame-shadow);
+  padding: 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--rn-frame-bg);
+  border: 1px solid var(--rn-frame-border);
+  font-family: var(--rn-font-family);
+  font-size: var(--rn-base-font-size);
+  color: var(--rn-body-color);
+}
+
+.ailu-rednote-preview-header {
+  padding-bottom: 12px;
+}
+
+.ailu-rednote-image-preview.ailu-rednote-account-header-hidden > .ailu-rednote-preview-header {
+  display: none;
+}
+
+.ailu-rednote-user-info {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ailu-rednote-user-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ailu-rednote-user-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--rn-avatar-bg);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+  line-height: 0;
+}
+
+.ailu-rednote-avatar-image,
+.ailu-rednote-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+}
+
+.ailu-rednote-avatar-image {
+  object-fit: cover;
+  display: block;
+}
+
+.ailu-rednote-avatar-placeholder {
+  color: var(--rn-avatar-color);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+
+.ailu-rednote-user-meta {
+  min-width: 0;
+}
+
+.ailu-rednote-user-name-container {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.ailu-rednote-user-name {
+  color: var(--rn-name-color);
+  font-size: calc(var(--rn-meta-size) + 1px);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.ailu-rednote-verified-icon {
+  width: 19px;
+  height: 19px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: visible;
+  line-height: 0;
+  transform: translateY(1px);
+}
+
+.ailu-rednote-verified-icon-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  overflow: visible;
+}
+
+.ailu-rednote-user-id {
+  color: var(--rn-id-color);
+  font-size: var(--rn-meta-size);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.ailu-rednote-user-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ailu-rednote-preview-badge {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--rn-header-badge-bg);
+  color: var(--rn-header-badge-color);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ailu-rednote-post-time {
+  color: var(--rn-time-color);
+  font-size: var(--rn-meta-size);
+}
+
+.ailu-rednote-preview-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+
+.ailu-rednote-content-wrapper,
+.ailu-rednote-content-container {
+  height: 100%;
+  overflow: hidden;
+}
+
+.ailu-rednote-content-section {
+  display: none;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ailu-rednote-preview-container section:not(.ailu-rednote-section-active):not(.ailu-rednote-section-visible) {
+  display: none;
+}
+
+.ailu-rednote-section-active,
+.ailu-rednote-section-visible {
+  display: block;
+}
+
+.ailu-rednote-section-hidden {
+  display: none !important;
+}
+
+.ailu-rednote-preview-footer {
+  position: static;
+  flex-shrink: 0;
+  margin: 0 -20px -20px;
+  padding: 10px 20px 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  color: var(--rn-footer-color);
+  font-size: var(--rn-footer-size);
+  border-top: 1px solid var(--rn-footer-border);
+  background: var(--rn-footer-bg, rgba(0, 0, 0, 0.04));
+  z-index: 10;
+}
+
+.ailu-rednote-preview-footer:empty {
+  display: none;
+}
+
+.ailu-rednote-footer-text {
+  white-space: nowrap;
+}
+
+.ailu-rednote-footer-separator {
+  opacity: 0.6;
+}
+
+.ailu-rednote-nav-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  position: sticky;
+  bottom: 12px;
+  z-index: 12;
+  width: fit-content;
+  margin: -4px auto 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(248, 244, 238, 0.92);
+  box-shadow: 0 10px 24px rgba(43, 28, 17, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.ailu-rednote-nav-button {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #68432f;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(43, 28, 17, 0.08);
+}
+
+.ailu-rednote-nav-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(43, 28, 17, 0.12);
+}
+
+.ailu-rednote-page-indicator {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  font-size: 13px;
+  color: #68432f;
+  box-shadow: 0 4px 10px rgba(43, 28, 17, 0.08);
+}
+
+.ailu-rednote-nav-hidden {
+  visibility: hidden;
+}
+
+.ailu-rednote-copy-button {
+  position: absolute;
+  top: 24px;
+  right: 30px;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.94);
+  color: #68432f;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 6px 16px rgba(43, 28, 17, 0.08);
+}
+
+.ailu-rednote-preview-container:hover .ailu-rednote-copy-button {
+  opacity: 1;
+}
+
+.ailu-rednote-copy-button:hover {
+  transform: translateY(-1px);
+}
+
+.ailu-rednote-copy-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ailu-rednote-rednote-section-shell {
+  height: 100%;
+  padding: 8px 4px 6px;
+  box-sizing: border-box;
+  color: var(--rn-body-color);
+}
+
+.ailu-rednote-rednote-section-title {
+  margin: 0 0 18px;
+  color: var(--rn-title-color);
+  font-size: var(--rn-title-size);
+  line-height: 1.3;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.ailu-rednote-image-preview[data-template-id="dark-orange"],
+.ailu-rednote-image-preview[data-template-id="neon-green"] {
+  padding: 24px;
+}
+
+.ailu-rednote-image-preview[data-template-id="dark-orange"] .ailu-rednote-rednote-section-shell,
+.ailu-rednote-image-preview[data-template-id="neon-green"] .ailu-rednote-rednote-section-shell {
+  padding: 12px 4px 8px;
+}
+
+.ailu-rednote-image-preview[data-template-id="dark-orange"] .ailu-rednote-rednote-section-title,
+.ailu-rednote-image-preview[data-template-id="neon-green"] .ailu-rednote-rednote-section-title {
+  margin-bottom: 18px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.ailu-rednote-image-preview[data-template-id="dark-orange"] .ailu-rednote-rednote-section-body,
+.ailu-rednote-image-preview[data-template-id="neon-green"] .ailu-rednote-rednote-section-body {
+  line-height: 1.86;
+}
+
+.ailu-rednote-rednote-section-body {
+  color: var(--rn-body-color);
+  font-size: var(--rn-base-font-size);
+  line-height: 1.72;
+}
+
+.ailu-rednote-rednote-section-body > *:first-child {
+  margin-top: 0;
+}
+
+.ailu-rednote-rednote-section-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.ailu-rednote-rednote-section-body p,
+.ailu-rednote-rednote-section-body ul,
+.ailu-rednote-rednote-section-body ol,
+.ailu-rednote-rednote-section-body blockquote,
+.ailu-rednote-rednote-section-body pre,
+.ailu-rednote-rednote-section-body table {
+  margin: 0 0 12px;
+}
+
+.ailu-rednote-subheading,
+.ailu-rednote-rednote-section-body h1,
+.ailu-rednote-rednote-section-body h2,
+.ailu-rednote-rednote-section-body h3 {
+  margin: 18px 0 10px;
+  color: var(--rn-heading-color);
+  font-size: calc(var(--rn-base-font-size) + 3px);
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.ailu-rednote-rednote-section-body ul,
+.ailu-rednote-rednote-section-body ol {
+  padding-left: 20px;
+}
+
+.ailu-rednote-rednote-section-body .ailu-rednote-list-fragment {
+  margin-bottom: 6px;
+}
+
+.ailu-rednote-rednote-section-body .ailu-rednote-list-fragment + .ailu-rednote-list-fragment {
+  margin-top: -2px;
+}
+
+.ailu-rednote-rednote-section-body .ailu-rednote-list-continuation {
+  list-style: none;
+}
+
+.ailu-rednote-rednote-section-body .ailu-rednote-list-continuation::before {
+  content: "续：";
+  color: rgba(142, 111, 103, 0.78);
+  font-weight: 700;
+}
+
+.ailu-rednote-rednote-section-body .ailu-rednote-table-fragment,
+.ailu-rednote-rednote-section-body .ailu-rednote-pre-fragment {
+  margin-bottom: 8px;
+}
+
+.ailu-rednote-rednote-section-body .ailu-rednote-table-fragment + .ailu-rednote-table-fragment,
+.ailu-rednote-rednote-section-body .ailu-rednote-pre-fragment + .ailu-rednote-pre-fragment {
+  margin-top: -4px;
+}
+
+.ailu-rednote-rednote-section-body li {
+  margin: 6px 0;
+}
+
+.ailu-rednote-jacky-cover-section {
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+.ailu-rednote-jacky-cover-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--rn-cover-content-bg);
+}
+
+.ailu-rednote-jacky-cover-portrait {
+  width: 100%;
+  flex: 62;
+  background: var(--rn-cover-portrait-bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.ailu-rednote-jacky-cover-portrait img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  max-width: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  display: block !important;
+}
+
+.ailu-rednote-jacky-cover-upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--rn-placeholder-color);
+  width: 100%;
+  height: 100%;
+  padding: 28px;
+  text-align: center;
+}
+
+.ailu-rednote-jacky-cover-upload-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: var(--rn-placeholder-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+}
+
+.ailu-rednote-jacky-cover-upload-text {
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+}
+
+.ailu-rednote-jacky-cover-content {
+  flex: 38;
+  padding: 26px 28px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  background: var(--rn-cover-content-bg);
+}
+
+.ailu-rednote-jacky-cover-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 14px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--rn-kicker-bg);
+  color: var(--rn-kicker-color);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ailu-rednote-jacky-cover-title {
+  font-family: var(--rn-font-family);
+  font-size: var(--rn-cover-title-size);
+  line-height: 1.3;
+  color: var(--rn-cover-title-color);
+  margin: 0 0 18px;
+  font-weight: 900;
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  letter-spacing: 0.01em;
+}
+
+.ailu-rednote-jacky-cover-summary-container {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.ailu-rednote-jacky-cover-summary-line {
+  width: 3px;
+  min-height: 100%;
+  background: var(--rn-cover-line);
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.ailu-rednote-jacky-cover-summary-text {
+  font-size: var(--rn-cover-summary-size);
+  line-height: 1.6;
+  color: var(--rn-cover-summary-color);
+  margin: 0;
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active {
+  padding: 0 !important;
+}
+
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active > .ailu-rednote-preview-header,
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active > .ailu-rednote-preview-footer {
+  display: none !important;
+}
+
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active > .ailu-rednote-preview-content {
+  flex: 1 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active .ailu-rednote-content-container,
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active .ailu-rednote-content-wrapper,
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active .ailu-rednote-jacky-cover-section,
+.ailu-rednote-image-preview.ailu-rednote-jacky-cover-active .ailu-rednote-jacky-cover-container {
+  height: 100% !important;
+}
+
+.ailu-rednote-code-dots {
+  margin: 0 0 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.ailu-rednote-code-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.ailu-rednote-code-dot-red {
+  background-color: #ff5f56;
+}
+
+.ailu-rednote-code-dot-yellow {
+  background-color: #ffbd2e;
+}
+
+.ailu-rednote-code-dot-green {
+  background-color: #27c93f;
+}
+
+.ailu-rednote-image-preview[data-template-id="dark-orange"] .ailu-rednote-code-dot-green {
+  background-color: #f79300;
+}
+
+.ailu-rednote-emphasis {
+  color: var(--rn-emphasis-color);
+  background: var(--rn-emphasis-bg);
+  border-radius: 6px;
+  padding: 0 4px;
+  font-weight: 900;
+}
+
+.ailu-rednote-link {
+  color: var(--rn-link-color);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rn-link-border);
+}
+
+.ailu-rednote-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: calc(var(--rn-base-font-size) - 1px);
+}
+
+.ailu-rednote-table th,
+.ailu-rednote-table td {
+  border: 1px solid var(--rn-table-border);
+  padding: 8px;
+}
+
+.ailu-rednote-table th {
+  background: var(--rn-table-header-bg);
+}
+
+.ailu-rednote-hr {
+  border: none;
+  border-top: 1px solid var(--rn-table-border);
+  margin: 20px 0;
+}
+
+.ailu-rednote-del {
+  text-decoration: line-through;
+}
+
+.ailu-rednote-task-list-item {
+  list-style: none;
+}
+
+.ailu-rednote-footnote {
+  color: var(--rn-link-color);
+  text-decoration: none;
+}
+
+.ailu-rednote-image {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 280px;
+  display: block;
+  margin: 16px auto;
+  border-radius: 14px;
+  object-fit: initial;
+  box-shadow: 0 10px 24px rgba(43, 28, 17, 0.12);
+  background: transparent;
+}
+
+/* 手绘笔记：纸张、便签与手写感。复杂信息图仍需要单独的插画或结构化卡片。 */
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] {
+  border: 2px solid rgba(102, 97, 108, 0.58);
+  border-radius: 15px 20px 16px 18px;
+  box-shadow: 5px 6px 0 rgba(104, 96, 112, 0.10), 0 18px 36px rgba(104, 96, 112, 0.12);
+  background-color: #fffaf7;
+  background-image:
+    linear-gradient(rgba(117, 153, 180, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(210, 162, 177, 0.07) 1px, transparent 1px);
+  background-size: 100% 28px, 28px 100%;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"],
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-user-name,
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-user-id,
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-rednote-section-shell,
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-footer-text {
+  font-family: var(--rn-font-family) !important;
+  font-weight: 400;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-preview-header {
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(117, 103, 124, 0.38);
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-user-avatar {
+  border: 2px solid rgba(102, 97, 108, 0.58);
+  border-radius: 12px 15px 11px 14px;
+  box-shadow: 2px 3px 0 rgba(61, 57, 51, 0.12);
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-preview-badge {
+  border: 1px solid rgba(61, 57, 51, 0.58);
+  border-radius: 4px 7px 5px 6px;
+  background: #eadff1;
+  color: #685b72;
+  box-shadow: 2px 2px 0 rgba(104, 96, 112, 0.10);
+  transform: rotate(1deg);
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-rednote-section-title {
+  display: inline;
+  color: #39353b;
+  letter-spacing: 0.03em;
+  background: linear-gradient(transparent 62%, rgba(245, 205, 213, 0.74) 62%);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font-weight: 400;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-subheading,
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-rednote-section-body h1,
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-rednote-section-body h2,
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-rednote-section-body h3 {
+  display: inline-block;
+  padding: 4px 8px;
+  border: 1px dashed #7599b4;
+  border-radius: 5px 9px 6px 8px;
+  background: #dceaf5;
+  color: #536f86;
+  font-weight: 400;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-blockquote {
+  border: 1px dashed rgba(199, 143, 132, 0.56);
+  background: rgba(244, 224, 211, 0.72);
+  box-shadow: 2px 2px 0 rgba(199, 143, 132, 0.08);
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-table th,
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-table td {
+  border-style: dashed;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-table th {
+  background: #dfe9d7;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-pre {
+  border: 1px dashed rgba(117, 153, 180, 0.52);
+  background: rgba(232, 237, 246, 0.86);
+  box-shadow: 2px 2px 0 rgba(117, 153, 180, 0.08);
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-code-dot-red {
+  background: #e8aeb7;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-code-dot-yellow {
+  background: #d9c9e5;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-code-dot-green {
+  background: #b9cba9;
+}
+
+.ailu-rednote-image-preview[data-template-id="handdrawn-notes"] .ailu-rednote-image {
+  border: 1px solid rgba(61, 57, 51, 0.64);
+  border-radius: 8px 13px 9px 12px;
+  box-shadow: 3px 3px 0 rgba(61, 57, 51, 0.12);
+}
+
+.ailu-rednote-blockquote {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--rn-quote-bg);
+  border: 1px solid var(--rn-quote-border);
+}
+
+.ailu-rednote-blockquote-p {
+  margin: 0;
+}
+
+.ailu-rednote-pre {
+  padding: 12px 14px;
+  border-radius: 16px;
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--rn-code-bg);
+  color: var(--rn-code-color);
+  font-size: calc(var(--rn-base-font-size) - 2px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ailu-rednote-pre code {
+  display: block;
+  max-width: 100%;
+  font-family: "SF Mono", Consolas, Monaco, monospace;
+  white-space: inherit;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ailu-rednote-rednote-export-surface {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 490px;
+  opacity: 1;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.ailu-rednote-about-modal .modal-content {
+  padding: 0;
+}
+
+.ailu-rednote-about-card {
+  padding: 20px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fff9f3 0%, #fff1e2 100%);
+  color: #4b2818;
+}
+
+.ailu-rednote-about-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.ailu-rednote-about-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f8d6b0 0%, #f5b98a 100%);
+  color: #7c2d12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.ailu-rednote-about-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ailu-rednote-about-name {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.ailu-rednote-about-id {
+  margin-top: 4px;
+  color: rgba(75, 40, 24, 0.7);
+}
+
+.ailu-rednote-about-tagline {
+  margin-top: 6px;
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(186, 91, 36, 0.08);
+  color: #9a4a24;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ailu-rednote-about-title {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+
+.ailu-rednote-about-body h3,
+.ailu-rednote-about-section-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.ailu-rednote-about-body p {
+  margin: 0 0 10px;
+  line-height: 1.7;
+}
+
+.ailu-rednote-about-callout {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(186, 91, 36, 0.08);
+  color: #8a3c17;
+}
+
+.ailu-rednote-about-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(193, 122, 78, 0.16);
+}
+
+.ailu-rednote-about-section-text {
+  color: rgba(75, 40, 24, 0.82);
+}
+
+.ailu-rednote-about-media-grid {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.ailu-rednote-about-media-card {
+  max-width: 240px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(193, 122, 78, 0.14);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ailu-rednote-about-media-image {
+  width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.ailu-rednote-about-media-caption {
+  padding: 8px 0 10px;
+  font-size: 12px;
+  color: rgba(75, 40, 24, 0.62);
+  text-align: center;
+}
+
+.ailu-rednote-about-media-placeholder {
+  padding: 18px;
+  text-align: center;
+}
+
+.ailu-rednote-about-media-placeholder-title {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.ailu-rednote-about-media-placeholder-text {
+  color: rgba(75, 40, 24, 0.62);
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.ailu-rednote-about-social-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ailu-rednote-about-social-card {
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(193, 122, 78, 0.14);
+  text-align: center;
+}
+
+.ailu-rednote-about-social-image {
+  width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.ailu-rednote-about-social-label {
+  padding: 6px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(75, 40, 24, 0.72);
+}
+
+.ailu-rednote-about-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(193, 122, 78, 0.16);
+  color: rgba(75, 40, 24, 0.76);
+  font-size: 13px;
+}
+
+.ailu-rednote-about-footer-separator {
+  opacity: 0.6;
+}
+
+.ailu-rednote-about-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* RedNote Bottom Action Bar */
+
+.ailu-rednote-global-bottom-bar {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  gap: 8px;
+  position: relative;
+  z-index: 20;
+}
+
+.ailu-rednote-rednote-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  gap: 8px;
+}
+
+.ailu-rednote-rn-bar-left,
+.ailu-rednote-rn-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ailu-rednote-rn-bar-icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: var(--background-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.ailu-rednote-rn-bar-icon-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.ailu-rednote-rn-bar-about-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ailu-rednote-rn-bar-about-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.ailu-rednote-rn-bar-primary-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #8b7355;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ailu-rednote-rn-bar-primary-btn:hover {
+  background: #7a6348;
+}
+
+.ailu-rednote-rn-bar-primary-btn:active {
+  transform: scale(0.97);
+}
+
+/* Usage Guide Popover */
+
+.ailu-rednote-rn-guide-popover {
+  position: fixed;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  z-index: 9999;
+  animation: ailu-rednote-popover-in 0.15s ease;
+}
+
+@keyframes ailu-rednote-popover-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ailu-rednote-rn-guide-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-normal);
+  margin-bottom: 10px;
+}
+
+.ailu-rednote-rn-guide-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ailu-rednote-rn-guide-item {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.ailu-rednote-rn-guide-item b {
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .ailu-rednote-preview-container {
+    min-width: auto;
+  }
+
+  .ailu-rednote-copy-button {
+    right: 20px;
+  }
+
+  .ailu-rednote-rednote-actions {
+    margin-left: 0;
+  }
+
+  .ailu-rednote-about-media-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+}
+/* END AILU REDNOTE STYLES */

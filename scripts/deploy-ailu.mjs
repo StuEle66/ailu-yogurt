@@ -8,7 +8,12 @@ import { verifyPublicSourceTree } from './public-source-policy.mjs';
 
 const CANONICAL_PLUGIN_ID = 'ailu';
 const CANONICAL_VAULT_NAMESPACE = '.ailu';
-const ARTIFACTS = ['main.js', 'manifest.json', 'styles.css', 'build-attestation.json'];
+const ARTIFACTS = ['main.js', 'manifest.json', 'styles.css', 'build-attestation.json',
+  'assets/fonts/MaShanZheng-Regular.woff2',
+  'assets/fonts/MaShanZheng-OFL.txt',
+  'assets/fonts/ZCOOLKuaiLe-Regular.ttf',
+  'assets/fonts/ZCOOLKuaiLe-OFL.txt',
+];
 const RECEIPT_SCHEMA_VERSION = 1;
 const LOCK_HELPER = String.raw`
 import base64
@@ -356,7 +361,12 @@ function readArtifacts(repoRoot) {
     || !Array.isArray(attested.inputs)) {
     throw new Error('Captured build attestation has an unsupported identity or schema.');
   }
-  for (const artifact of ['main.js', 'manifest.json', 'styles.css']) {
+  for (const artifact of ['main.js', 'manifest.json', 'styles.css',
+  'assets/fonts/MaShanZheng-Regular.woff2',
+  'assets/fonts/MaShanZheng-OFL.txt',
+  'assets/fonts/ZCOOLKuaiLe-Regular.ttf',
+  'assets/fonts/ZCOOLKuaiLe-OFL.txt',
+]) {
     const captured = result.find(item => item.filename === artifact);
     if (attested.artifacts?.[artifact] !== captured?.sha256) {
       throw new Error(`Captured ${artifact} bytes do not match the captured build attestation.`);
@@ -645,6 +655,13 @@ async function applyPlan(plan, artifacts) {
     const artifactAfter = {};
     for (const artifact of artifacts) {
       const target = path.join(targetDir, artifact.filename);
+      let artifactParent = targetDir;
+      for (const directory of artifact.filename.split('/').slice(0, -1)) {
+        artifactParent = path.join(artifactParent, directory);
+        if (!safeLstat(artifactParent)) fs.mkdirSync(artifactParent, { mode: 0o700 });
+        assertSafeDirectory(artifactParent, 'release artifact directory');
+        fs.chmodSync(artifactParent, 0o700);
+      }
       await helperCasBuffer(
         locks[locks.length - 2],
         target,

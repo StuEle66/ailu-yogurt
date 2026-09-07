@@ -1,3 +1,5 @@
+import { chooseRedNoteImage, redNoteTemplateSettingsPatch } from './redNotePublishingPanel';
+import { RedNoteSettingsManager, type RedNoteSettings } from '../rednote';
 import { App, Notice, Plugin, PluginSettingTab, Setting, setIcon } from 'obsidian';
 
 import {
@@ -363,7 +365,82 @@ export class AiluSettingTab extends PluginSettingTab {
         }));
   }
 
+  private async renderRedNoteSettings(containerEl: HTMLElement): Promise<void> {
+    const section = containerEl.createDiv({ cls: 'ailu-settings-section' });
+    new Setting(section).setName('小红书图卡').setDesc('图卡仅在本机预览和导出，独立保存排版与账号资料。').setHeading();
+    const manager = new RedNoteSettingsManager({
+      load: async () => ({ rednote: this.deps.getSettings().rednote }),
+      save: async data => {
+        const settings = this.deps.getSettings();
+        const previous = settings.rednote;
+        settings.rednote = data.rednote ?? {};
+        try { await this.deps.saveSettings(); } catch (error) { settings.rednote = previous; throw error; }
+        this.deps.refreshViews();
+      },
+    });
+    try { await manager.load(); } catch (error) {
+      section.createEl('p', { text: userFacingErrorMessage(error, '小红书设置读取失败。') });
+      return;
+    }
+    if (!section.isConnected) return;
+    const update = async (patch: Partial<RedNoteSettings>): Promise<void> => {
+      try { await manager.update(patch); } catch (error) { new Notice(userFacingErrorMessage(error, '小红书设置保存失败。')); }
+    };
+    const settings = manager.getSettings();
+    new Setting(section).setName('图卡模板').addDropdown(dropdown => {
+      for (const template of manager.getTemplates()) dropdown.addOption(template.id, template.name);
+      dropdown.setValue(settings.templateId).onChange(value => update(redNoteTemplateSettingsPatch(value)));
+    });
+    new Setting(section).setName('图卡字体').addDropdown(dropdown => {
+      for (const font of manager.getFontOptions()) dropdown.addOption(font.value, font.label);
+      dropdown.setValue(settings.fontFamily).onChange(value => update({ fontFamily: value }));
+    });
+    new Setting(section).setName('图卡字号').addSlider(slider => slider.setLimits(12, 28, 1)
+      .setValue(settings.fontSize).setDynamicTooltip().onChange(value => update({ fontSize: value })));
+    for (const [key, label] of [
+      ['userName', '账号名称'], ['userId', '账号 ID'], ['notesTitle', '封面标题'],
+      ['brandTagline', '封面介绍'], ['footerLeftText', '页脚左侧'], ['footerRightText', '页脚右侧'],
+      ['aboutTitle', '关于标题'], ['aboutBio', '关于简介'], ['aboutCallout', '关于说明'],
+      ['supportTitle', '支持页标题'], ['supportText', '支持页正文'],
+      ['officialTitle', '公众号页标题'], ['officialText', '公众号页正文'], ['timeFormat', '日期地区格式'],
+    ] as const) {
+      new Setting(section).setName(label).addText(text => text.setValue(settings[key]).onChange(value => update({ [key]: value })));
+    }
+    new Setting(section).setName('显示日期').addToggle(toggle => toggle.setValue(settings.showTime).onChange(value => update({ showTime: value })));
+    for (const [key, label] of [['userAvatar', '账号头像'], ['coverImage', '小红书封面图片'],
+      ['supportQrImage', '支持页二维码'], ['supportBannerImage', '支持页横幅'],
+      ['officialQrImage', '公众号二维码'], ['officialBannerImage', '公众号横幅']] as const) {
+      const setting = new Setting(section).setName(label).setDesc(settings[key] ? '已设置独立图片；原照片不会修改。' : '尚未设置图片。');
+      setting.addButton(button => button.setButtonText('选择图片').onClick(async () => {
+        try {
+          const image = await chooseRedNoteImage();
+          if (!image) return;
+          await update({ [key]: image });
+          if (this.deps.getSettings().rednote[key] === image) setting.setDesc('已设置独立图片。');
+        } catch (error) { new Notice(userFacingErrorMessage(error, '图片选择失败。')); }
+      }));
+      setting.addButton(button => button.setButtonText('移除图片').onClick(async () => { await update({ [key]: '' }); if (!this.deps.getSettings().rednote[key]) setting.setDesc('尚未设置图片。'); }));
+    }
+    const fonts = section.createDiv();
+    new Setting(fonts).setName('自定义字体').setDesc('使用本机已安装字体的名称；离线内置字体会始终保留。').setHeading();
+    for (const font of settings.customFonts.filter(font => !font.isPreset)) {
+      new Setting(fonts).setName(font.label).setDesc(font.value).addButton(button => button.setButtonText('移除').onClick(async () => {
+        await update({ customFonts: manager.getSettings().customFonts.filter(item => item.value !== font.value) });
+        this.display();
+      }));
+    }
+    let fontName = ''; let fontFamily = '';
+    new Setting(fonts).setName('添加字体').addText(text => text.setPlaceholder('显示名称').onChange(value => { fontName = value.trim(); }))
+      .addText(text => text.setPlaceholder('font-family 名称').onChange(value => { fontFamily = value.trim(); }))
+      .addButton(button => button.setButtonText('添加').onClick(async () => {
+        if (!fontName || !fontFamily) { new Notice('请填写字体显示名称和 font-family。'); return; }
+        await update({ customFonts: [...manager.getSettings().customFonts.filter(font => font.value !== fontFamily), { label: fontName, value: fontFamily, isPreset: false }] });
+        this.display();
+      }));
+  }
+
   private renderPublishing(containerEl: HTMLElement): void {
+    void this.renderRedNoteSettings(containerEl);
     const settings = this.deps.getSettings();
     const publishing = settings.publishing;
     const section = containerEl.createDiv({ cls: 'ailu-settings-section' });

@@ -114,3 +114,20 @@ Copyright (c) Felix Böhm. All rights reserved.
 
 License: BSD-2-Clause. The complete license notice is available at
 `LICENSES/ENTITIES-BSD-2-CLAUSE.txt`.
+
+# MDFlow Rednote export and offline fonts
+
+The Rednote card export integration derives from yogurt-mdflow at commit
+`6c2431d60ea2c244ee1c244e98f5f4e9c285db9a`:
+https://github.com/StuEle66/yogurt-mdflow
+The MIT license and original copyright notice are retained in
+`LICENSES/MDFLOW-MIT.txt`. This integration retains the original font bytes.
+
+- html-to-image 1.11.13: MIT, Copyright (c) 2017–2025 W.Y.; see `LICENSES/HTML-TO-IMAGE-MIT.txt`.
+- JSZip 3.10.1: used under its MIT option; original dual-license text is retained in `LICENSES/JSZIP-LICENSE.txt`.
+- JSZip runtime dependencies: their original notices are retained in `LICENSES/JSZIP-RUNTIME-NOTICES.txt`.
+- Ma Shan Zheng, supplied by @fontsource/ma-shan-zheng 5.2.6: SIL OFL 1.1; see `LICENSES/MA-SHAN-ZHENG-OFL.txt` and `assets/fonts/MaShanZheng-OFL.txt`.
+- ZCOOL KuaiLe: SIL OFL 1.1, Copyright 2018 The ZCOOL KuaiLe Project Authors; see `LICENSES/ZCOOL-KUAILE-OFL.txt` and `assets/fonts/ZCOOLKuaiLe-OFL.txt`.
+
+Fonts and OFL notices are included as offline installation assets and covered by
+the build attestation. Font licenses remain OFL; they are not relicensed under AGPL.

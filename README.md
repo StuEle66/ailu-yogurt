@@ -2,9 +2,9 @@
 
 ## 此定制仓库
 
-本仓库为 Ailu 的个人改进分支，版本 `0.2.1`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。本轮增加公众号受管预览图片的复制修复，以及独立封面选择、裁剪与恢复正文首图。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
+本仓库为 Ailu 的个人改进分支，版本 `0.2.1`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪，以及从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
 
-上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。开发分支为 `feat/wechat-media-workflow`。
+上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。当前功能分支为 `feat/rednote-publishing`。
 
 后续同步先执行 `git fetch upstream`，再用 `git log --oneline main..upstream/main` 与 `git diff main...upstream/main` 审查变化。确认同步范围后，在开发分支显式合并选定的上游提交并重新运行完整检查；不要直接重置有改动的分支。完成并验证的项目改动按根目录 `AGENTS.md` 提交并推送到 `origin`。
 
@@ -69,7 +69,7 @@ Vault 参数必须是带引号的真实绝对物理路径，不能使用 `~`、�
 npm run deploy:plan -- --vault "/Users/你的用户名/Documents/My Vault"
 ```
 
-确认输出中的 Vault、插件 ID 和四个产物哈希无误，完全退出所有 Obsidian 进程，再执行 apply：
+确认输出中的 Vault、插件 ID 和八个产物哈希无误，完全退出所有 Obsidian 进程，再执行 apply：
 
 ```bash
 npm run deploy:apply -- --vault "/Users/你的用户名/Documents/My Vault"
@@ -141,7 +141,8 @@ npm run deploy:plan -- --vault "/Users/你的用户名/Documents/My Vault"
 - 只通过用户自行部署的 [`wechat-relay`](https://github.com/mcncarl/wechat-relay) 创建公众号草稿；每次都需要最终确认，并在创建后回读核验。
 - 若创建接口已返回 `media_id` 但回读失败，工作台会保留该 ID 并提示先人工核对草稿箱；端到端防重复仍要求中转服务持久化处理 `Idempotency-Key`。
 - 不包含群发和正式发布入口，Agent 也不能绕过确认直接上传。
-- 草稿区通过同一行的“公众号 / 飞书 / X 文章”切换目标，不增加新的侧边栏标签或 Ribbon 入口。
+- 草稿区通过同一行的“公众号 / 小红书 / 飞书 / X 文章”切换目标，不增加新的侧边栏标签或 Ribbon 入口。
+- 小红书模式把当前 Markdown 生成为 3:4 图片卡片，保留 MDFlow 的模板、字体、头像、账号资料、封面、自动分页与 `---` 手动分页；支持下载当前页 PNG 和按预览顺序导出全部页面 ZIP。第一次打开会只读导入 `yogurt-mdflow` 的小红书设置，旧插件和旧设置不会被改写。
 - 飞书模式复用用户独立安装的 `lark-cli`，只申请文档创建、读取、覆盖更新、图片上传，以及云盘文件夹和知识库节点的目录只读权限；不会读取消息、日历或多维表格内容，也不会退出本机共享的飞书登录。
 - 首次创建默认放入个人文档库根目录；“更改”会只读加载云盘文件夹、个人文档库和当前账号可访问的知识库层级，用户可逐级展开并选择，不需要复制链接。该位置只影响新建文档，已关联文档仍在原位置更新并保持链接不变。本地图片按原文位置插入，每次创建或覆盖前均需确认，并在完成后回读验证。
 - X 文章模式在本机生成接近 X Article 的 5:2 封面卡片与正文预览；代码块、图片、图注、表格和 X 帖子链接均有本地样式，预览不会静默加载 X 的远程 widgets 脚本。
@@ -224,7 +225,7 @@ npm run deploy:plan -- --vault "/绝对路径/某个 Vault"
 npm run deploy:apply -- --vault "/绝对路径/某个 Vault"
 ```
 
-`apply` 仅支持已验证的 macOS/POSIX gateway，要求所有 Obsidian 进程退出，并独占 Ailu 的 Vault 锁与全局 Provider 锁。构建器先后两次实哈希完整源码、依赖锁和 Node/esbuild/TypeScript 工具链，并把证明写入 `build-attestation.json`；部署器再对实际捕获的证明和产物交叉复核。它在 `.obsidian/ailu-deployment-backups/` 下用 `O_EXCL` 创建不覆盖的私有备份，备份当前 `community-plugins.json` 和已有 Ailu 发行目录，再复制并实哈希验证 `main.js`、`manifest.json`、`styles.css` 与构建证明。最后通过物理锁 helper 的原子 exchange CAS 在 `community-plugins.json` 中启用 `ailu`，保留列表中的其他插件 ID。启用列表是唯一权威提交指针；失败 sidecar、receipt 与 outcome 保留为 `0600` 证据，不自动删除。
+`apply` 仅支持已验证的 macOS/POSIX gateway，要求所有 Obsidian 进程退出，并独占 Ailu 的 Vault 锁与全局 Provider 锁。构建器先后两次实哈希完整源码、依赖锁和 Node/esbuild/TypeScript 工具链，并把证明写入 `build-attestation.json`；部署器再对实际捕获的证明和产物交叉复核。它在 `.obsidian/ailu-deployment-backups/` 下用 `O_EXCL` 创建不覆盖的私有备份，备份当前 `community-plugins.json` 和已有 Ailu 发行目录，再复制并实哈希验证 `main.js`、`manifest.json`、`styles.css`、构建证明及 `assets/fonts/` 下的两套字体和许可证。最后通过物理锁 helper 的原子 exchange CAS 在 `community-plugins.json` 中启用 `ailu`，保留列表中的其他插件 ID。启用列表是唯一权威提交指针；失败 sidecar、receipt 与 outcome 保留为 `0600` 证据，不自动删除。
 
 回滚先读 plan，再 apply receipt：
 
@@ -233,7 +234,7 @@ npm run deploy:rollback-plan -- --receipt "/绝对路径/deploy-receipt.json"
 npm run deploy:rollback-apply -- --receipt "/绝对路径/deploy-receipt.json"
 ```
 
-如果进程恰好在启用指针已成功、outcome 证据尚未落盘的窗口崩溃，普通 plan 会 fail-closed。先在 Obsidian 完全退出时用同一 receipt 做只读恢复计划，再在全部 writer lock 下核对精确启用列表和四个产物哈希并补齐终态证据：
+如果进程恰好在启用指针已成功、outcome 证据尚未落盘的窗口崩溃，普通 plan 会 fail-closed。先在 Obsidian 完全退出时用同一 receipt 做只读恢复计划，再在全部 writer lock 下核对精确启用列表和八个产物哈希并补齐终态证据：
 
 ```bash
 npm run deploy:recover-plan -- --receipt "/绝对路径/deploy-receipt.json"
@@ -250,7 +251,7 @@ npm run audit:dependencies
 npm run check
 ```
 
-Obsidian 插件资产为 `main.js`、`manifest.json` 和 `styles.css`，并附 `build-attestation.json`。每个 GitHub Release 还同时提供根 `LICENSE`、`THIRD_PARTY_NOTICES.md` 与 `LICENSES/*.txt`；完整法律文本也会作为保留注释嵌入 `main.js`，因此通过 Obsidian 安装插件时不会丢失许可证与第三方声明。
+Obsidian 插件资产为 `main.js`、`manifest.json`、`styles.css`、`build-attestation.json`，以及 `assets/fonts/` 下的两套离线字体与 OFL 许可证。每个 GitHub Release 还同时提供根 `LICENSE`、`THIRD_PARTY_NOTICES.md` 与 `LICENSES/*.txt`；完整法律文本也会作为保留注释嵌入 `main.js`，因此通过 Obsidian 安装插件时不会丢失许可证与第三方声明。
 
 提交普通问题前请先使用设置页的“复制脱敏诊断”。不要上传原始 `~/.ailu/logs/`、X 诊断目录、最终截图、Cookie 文件、草稿 URL、Vault 路径或任何 SecretStorage 内容。安全问题不要提交 issue，请按 [SECURITY.md](SECURITY.md) 私下报告；数据流与默认边界见 [PRIVACY.md](PRIVACY.md) 和 [THREAT_MODEL.md](THREAT_MODEL.md)。
 

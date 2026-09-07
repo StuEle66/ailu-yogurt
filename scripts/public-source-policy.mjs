@@ -16,6 +16,14 @@ const ALLOWED_BINARY_FILES = new Map([
     magic: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     sha256: 'e3f456b18da3704157f51c29b5dbe85baa4f8a48499fbdc6c176585050ce84aa',
   }],
+  ['assets/fonts/MaShanZheng-Regular.woff2', {
+    magic: Uint8Array.from([0x77, 0x4f, 0x46, 0x32]),
+    sha256: 'b9d416b65858c92f31b4447d119bec2ef31c883f0764604f353c3a641f156dcb',
+  }],
+  ['assets/fonts/ZCOOLKuaiLe-Regular.ttf', {
+    magic: Uint8Array.from([0x00, 0x01, 0x00, 0x00]),
+    sha256: 'bc218a547914684c036e0e141bdc60fd94e5fbe22eb84e1f4d1859875fc2415b',
+  }],
 ]);
 const ALLOWED_TEXT_EXTENSIONS = new Set([
   '.css',

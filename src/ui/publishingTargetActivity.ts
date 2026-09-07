@@ -1,4 +1,4 @@
-export type PublishingTarget = 'wechat' | 'feishu' | 'x';
+export type PublishingTarget = 'wechat' | 'rednote' | 'feishu' | 'x';
 
 export type PublishingTargetActivityTone = 'idle' | 'running' | 'attention';
 
@@ -36,3 +36,10 @@ export function publishingTargetAccessibleLabel(input: {
   if (input.selected) parts.push('当前页面');
   return parts.join('，');
 }
+
+export const PUBLISHING_TARGETS = [
+  { id: 'wechat', label: '公众号' },
+  { id: 'rednote', label: '小红书' },
+  { id: 'feishu', label: '飞书' },
+  { id: 'x', label: 'X 文章' },
+] as const;

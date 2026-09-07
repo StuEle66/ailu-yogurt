@@ -47,7 +47,12 @@ if (JSON.stringify(after) !== JSON.stringify(before)) {
 }
 
 const artifacts = {};
-for (const file of ['main.js', 'manifest.json', 'styles.css']) {
+for (const file of ['main.js', 'manifest.json', 'styles.css',
+  'assets/fonts/MaShanZheng-Regular.woff2',
+  'assets/fonts/MaShanZheng-OFL.txt',
+  'assets/fonts/ZCOOLKuaiLe-Regular.ttf',
+  'assets/fonts/ZCOOLKuaiLe-OFL.txt',
+]) {
   artifacts[file] = sha256(fs.readFileSync(path.join(root, file)));
 }
 const attestation = {

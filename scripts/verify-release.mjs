@@ -14,6 +14,12 @@ const EXPECTED_VERSION = '0.2.1';
 const STORAGE_NAMESPACE = '.ailu';
 const BUILD_ATTESTATION = 'build-attestation.json';
 const DISTRIBUTION_LEGAL_FILES = [
+  'LICENSES/MDFLOW-MIT.txt',
+  'LICENSES/HTML-TO-IMAGE-MIT.txt',
+  'LICENSES/JSZIP-LICENSE.txt',
+  'LICENSES/JSZIP-RUNTIME-NOTICES.txt',
+  'LICENSES/MA-SHAN-ZHENG-OFL.txt',
+  'LICENSES/ZCOOL-KUAILE-OFL.txt',
   'LICENSE',
   'THIRD_PARTY_NOTICES.md',
   'LICENSES/DIJKSTRAJS-MIT.txt',
@@ -57,7 +63,12 @@ function verifyBuildAttestation(publicSourceFiles) {
     JSON.stringify(attestation.inputs) === JSON.stringify(expectedInputs),
     'Build attestation does not match the complete current source/package/toolchain input set.',
   );
-  for (const artifact of ['main.js', 'manifest.json', 'styles.css']) {
+  for (const artifact of ['main.js', 'manifest.json', 'styles.css',
+  'assets/fonts/MaShanZheng-Regular.woff2',
+  'assets/fonts/MaShanZheng-OFL.txt',
+  'assets/fonts/ZCOOLKuaiLe-Regular.ttf',
+  'assets/fonts/ZCOOLKuaiLe-OFL.txt',
+]) {
     requireCondition(
       attestation.artifacts?.[artifact] === sha256(fs.readFileSync(artifact)),
       `Build attestation does not match ${artifact}.`,
@@ -76,6 +87,17 @@ requireCondition(manifest.version === EXPECTED_VERSION, `Manifest version must b
 requireCondition(packageJson.name === EXPECTED_PLUGIN_ID, 'Package name must match the plugin id.');
 requireCondition(packageJson.version === manifest.version, 'Package and manifest versions must match.');
 requireCondition(packageJson.private === true, 'The source package must remain private to prevent accidental npm publishing.');
+for (const [name, version] of Object.entries({
+  'html-to-image': '1.11.13',
+  jszip: '3.10.1',
+  '@fontsource/ma-shan-zheng': '5.2.6',
+})) {
+  requireCondition(
+    packageJson.dependencies?.[name] === version
+      && packageLock.packages?.[`node_modules/${name}`]?.version === version,
+    `Rednote runtime dependency ${name} must remain pinned to ${version}.`,
+  );
+}
 requireCondition(packageJson.license === 'AGPL-3.0-or-later', 'Package license must be AGPL-3.0-or-later.');
 requireCondition(packageLock.name === packageJson.name, 'Package lock name must match package.json.');
 requireCondition(packageLock.version === packageJson.version, 'Package lock version must match package.json.');

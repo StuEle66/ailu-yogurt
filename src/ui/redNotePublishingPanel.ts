@@ -1,0 +1,268 @@
+import type { AiluSettings } from '../types';
+
+/** Import only the legacy layout block. Reads never write to the legacy plugin. */
+export async function initializeRedNoteImport(
+  settings: AiluSettings,
+  readLegacy: () => Promise<string>,
+  save: () => Promise<void>,
+  retry = false,
+): Promise<void> {
+  if (settings.redNoteImport.status === 'imported' || settings.redNoteImport.status === 'skipped') return;
+  if (settings.redNoteImport.status === 'failed' && !retry) return;
+  const previous = settings.rednote;
+  let imported: typeof settings.rednote | null = null;
+  try {
+    if (Object.keys(previous).length) {
+      settings.redNoteImport = { status: 'skipped', error: '' };
+      await save();
+      return;
+    }
+    const parsed: unknown = JSON.parse(await readLegacy());
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('MDFlow 设置不是有效对象。');
+    const legacy = (parsed as Record<string, unknown>).rednote;
+    if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) throw new Error('MDFlow 中没有可导入的小红书设置。');
+    const allowed = [
+      'templateId', 'fontFamily', 'fontSize', 'userAvatar', 'userName', 'userId', 'showTime', 'timeFormat',
+      'notesTitle', 'brandTagline', 'footerLeftText', 'footerRightText', 'coverImage', 'aboutTitle', 'aboutBio',
+      'aboutCallout', 'supportTitle', 'supportText', 'supportQrImage', 'supportBannerImage', 'officialTitle',
+      'officialText', 'officialQrImage', 'officialBannerImage', 'customFonts',
+    ];
+    const entries = Object.entries(legacy).filter(([key]) => allowed.includes(key));
+    for (const [key, value] of entries) {
+      const valid = key === 'fontSize' ? typeof value === 'number' && Number.isFinite(value)
+        : key === 'showTime' ? typeof value === 'boolean'
+        : key === 'customFonts' ? Array.isArray(value) && value.every((font: unknown) => font && typeof font === 'object'
+          && typeof (font as Record<string, unknown>).label === 'string' && typeof (font as Record<string, unknown>).value === 'string')
+        : typeof value === 'string';
+      if (!valid) throw new Error(`MDFlow 小红书设置字段损坏：${key}`);
+    }
+    if (settings.rednote !== previous || Object.keys(settings.rednote).length) {
+      settings.redNoteImport = { status: 'skipped', error: '' };
+      await save(); return;
+    }
+    imported = Object.fromEntries(entries.map(([key, value]) => [key, key === 'customFonts'
+      ? (value as Array<Record<string, unknown>>).map(font => ({ label: font.label, value: font.value, isPreset: font.isPreset === true })) : value]));
+    settings.rednote = imported;
+    settings.redNoteImport = { status: 'imported', error: '' };
+    await save();
+  } catch (error) {
+    if (settings.rednote === imported) settings.rednote = previous;
+    settings.redNoteImport = { status: 'failed', error: error instanceof Error ? error.message : '导入失败。' };
+    try { await save(); } catch { /* Visible failed state remains available for retry. */ }
+  }
+}
+
+import { MarkdownView, Notice, sanitizeHTMLToDom, type App, type TFile } from 'obsidian';
+import {
+  RedNoteExporter, RedNoteSettingsManager, MarkdownConverter, ImageResolver,
+  loadBundledFonts, RedNoteAboutModal, REDNOTE_HANDWRITING_FONT, type RedNoteSettings,
+} from '../rednote';
+import { IDLE_PUBLISHING_TARGET_ACTIVITY, runningPublishingTargetActivity, attentionPublishingTargetActivity } from './publishingTargetActivity';
+
+/** Read the editor for this exact note, even when another leaf is active. */
+export async function readRedNoteSource(app: App, file: TFile): Promise<string> {
+  for (const leaf of app.workspace.getLeavesOfType('markdown')) {
+    if (leaf.view instanceof MarkdownView && leaf.view.file?.path === file.path) return leaf.view.editor.getValue();
+  }
+  return app.vault.read(file);
+}
+
+
+/** System picker shared by the workspace and all six settings assets. */
+export function chooseRedNoteImage(): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const input = document.body.createEl('input', { type: 'file' });
+    input.accept = 'image/jpeg,image/png,image/webp'; input.hidden = true;
+    input.addEventListener('cancel', () => { input.remove(); resolve(null); }, { once: true });
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]; input.remove();
+      if (!file) { resolve(null); return; }
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024) {
+        reject(new Error('请选择小于 10 MB 的有效 JPEG、PNG 或 WebP 图片。')); return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('图片读取失败，请重新选择。'));
+      reader.onload = () => { void (async () => {
+        try {
+          if (typeof reader.result !== 'string') throw new Error('图片读取失败。');
+          const image = new Image(); image.src = reader.result; await image.decode();
+          if (!image.naturalWidth || !image.naturalHeight) throw new Error('图片尺寸无效。');
+          resolve(reader.result);
+        } catch { reject(new Error('图片无法解码，请重新选择 JPEG、PNG 或 WebP 图片。')); }
+      })(); };
+      reader.readAsDataURL(file);
+    }, { once: true });
+    input.click();
+  });
+}
+
+export function redNoteTemplateSettingsPatch(templateId: string): Partial<RedNoteSettings> {
+  return templateId === 'handdrawn-notes'
+    ? { templateId, fontFamily: REDNOTE_HANDWRITING_FONT }
+    : { templateId };
+}
+
+interface RedNotePanelDeps {
+  app: App;
+  file: TFile;
+  getSettings: () => AiluSettings;
+  saveSettings: () => Promise<void>;
+  requestRender: () => void;
+  openSettings: () => void;
+}
+
+type RedNoteContent = Awaited<ReturnType<RedNoteExporter['prepare']>>;
+
+export class RedNotePublishingPanel {
+  private manager: RedNoteSettingsManager;
+  private converter: MarkdownConverter;
+  private exporter: RedNoteExporter;
+  private content: RedNoteContent | null = null;
+  private source = '';
+  private busy = false;
+  private disposed = false;
+  private started = false;
+  private error = '';
+  private fontCleanup: (() => void) | null = null;
+  private readonly sourcePath: string;
+  private preview: HTMLElement | null = null;
+
+  constructor(private readonly deps: RedNotePanelDeps) {
+    this.sourcePath = deps.file.path;
+    this.manager = new RedNoteSettingsManager({
+      load: async () => ({ rednote: deps.getSettings().rednote }),
+      save: async data => {
+        const settings = deps.getSettings();
+        const previous = settings.rednote;
+        settings.rednote = data.rednote ?? {};
+        try { await deps.saveSettings(); } catch (error) { settings.rednote = previous; throw error; }
+      },
+      reportError: message => { this.error = message; },
+    });
+    this.converter = new MarkdownConverter(deps.app);
+    this.exporter = new RedNoteExporter(new ImageResolver(deps.app), this.manager);
+  }
+
+  isBusy(): boolean { return this.busy; }
+  activity() {
+    return this.busy ? runningPublishingTargetActivity('正在生成图卡')
+      : this.error ? attentionPublishingTargetActivity('图卡需要检查') : IDLE_PUBLISHING_TARGET_ACTIVITY;
+  }
+  activate(): void { if (!this.started && !this.busy && !this.disposed) void this.refresh(); }
+  dispose(): void { this.disposed = true; this.converter.dispose(); this.fontCleanup?.(); this.fontCleanup = null; }
+
+  private assertSource(): void {
+    if (this.disposed || this.deps.file.path !== this.sourcePath
+      || this.deps.app.vault.getAbstractFileByPath(this.sourcePath) !== this.deps.file) {
+      throw new Error('原文章已关闭、移动或删除，请重新打开图卡。');
+    }
+  }
+
+  async refresh(retryImport = false): Promise<void> {
+    if (this.busy || this.disposed) return;
+    this.busy = true; this.started = true; this.error = '';
+    this.deps.requestRender();
+    try {
+      await initializeRedNoteImport(this.deps.getSettings(),
+        () => this.deps.app.vault.adapter.read(`${this.deps.app.vault.configDir}/plugins/yogurt-mdflow/data.json`),
+        this.deps.saveSettings, retryImport);
+      await this.manager.load();
+      if (!this.fontCleanup) {
+        const cleanup = await loadBundledFonts(this.deps.app, `${this.deps.app.vault.configDir}/plugins/ailu`);
+        if (this.disposed) { cleanup(); return; }
+        this.fontCleanup = cleanup;
+      }
+      this.assertSource();
+      const source = await readRedNoteSource(this.deps.app, this.deps.file);
+      const html = await this.converter.convertToHtml(source, this.deps.file);
+      const content = await this.exporter.prepare(html, this.context());
+      this.assertSource();
+      this.source = source; this.content = content;
+    } catch (error) { this.error = error instanceof Error ? error.message : '图卡生成失败。'; }
+    finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
+  }
+
+  private context() { return { app: this.deps.app, sourceFile: this.deps.file, title: this.deps.file.basename }; }
+
+  async updateSettings(patch: Partial<RedNoteSettings>): Promise<void> {
+    if (this.busy) return;
+    this.busy = true; this.deps.requestRender();
+    try {
+      await this.manager.update(patch);
+      this.busy = false;
+      await this.refresh();
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '设置保存失败。';
+    } finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
+  }
+
+  async render(parent: HTMLElement): Promise<void> {
+    const panel = parent.createDiv({ cls: 'ailu-rednote-panel ailu-rednote-scope' });
+    const controls = panel.createDiv({ cls: 'ailu-rednote-controls' });
+    const template = controls.createEl('select', { attr: { 'aria-label': '小红书模板' } });
+    for (const preset of this.manager.getTemplates()) template.createEl('option', { value: preset.id, text: preset.name });
+    template.value = this.manager.getSettings().templateId;
+    template.disabled = this.busy;
+    template.onchange = () => void this.updateSettings(redNoteTemplateSettingsPatch(template.value));
+    const font = controls.createEl('select', { attr: { 'aria-label': '小红书字体' } });
+    for (const option of this.manager.getFontOptions()) font.createEl('option', { value: option.value, text: option.label });
+    font.value = this.manager.getSettings().fontFamily; font.disabled = this.busy;
+    font.onchange = () => void this.updateSettings({ fontFamily: font.value });
+    const size = controls.createEl('input', { type: 'number', attr: { 'aria-label': '小红书字号', min: '12', max: '28' } });
+    size.value = String(this.manager.getSettings().fontSize); size.disabled = this.busy;
+    size.onchange = () => void this.updateSettings({ fontSize: Number(size.value) });
+    const refresh = controls.createEl('button', { text: '刷新图卡' });
+    refresh.disabled = this.busy; refresh.onclick = () => void this.refresh();
+    for (const [field, label] of [['userAvatar', '上传头像'], ['coverImage', '上传封面']] as const) {
+      const button = controls.createEl('button', { text: label }); button.disabled = this.busy;
+      button.onclick = () => { void (async () => {
+        try { const image = await chooseRedNoteImage(); if (image) await this.updateSettings({ [field]: image }); }
+        catch (error) { new Notice(error instanceof Error ? error.message : '图片选择失败。'); }
+      })(); };
+    }
+    const more = controls.createEl('button', { text: '更多设置' });
+    more.onclick = this.deps.openSettings;
+    const importState = this.deps.getSettings().redNoteImport;
+    if (importState.status === 'failed') {
+      panel.createEl('p', { text: `旧设置导入失败，当前使用默认或已保存设置：${importState.error}` });
+      const retry = panel.createEl('button', { text: '重试导入旧设置' });
+      retry.disabled = this.busy; retry.onclick = () => void this.refresh(true);
+    }
+    if (this.error) panel.createEl('p', { cls: 'ailu-rednote-error', text: this.error });
+    if (this.busy) panel.createEl('p', { text: '正在处理图卡，请稍候…' });
+    this.preview = panel.createDiv({ cls: 'ailu-rednote-preview' });
+    if (this.content) {
+      this.preview.appendChild(sanitizeHTMLToDom(this.content.previewHtml));
+      this.exporter.mountPreview(this.preview, this.content);
+    }
+    const footer = panel.createDiv({ cls: 'ailu-rednote-panel-footer' });
+    const guide = footer.createEl('details');
+    guide.createEl('summary', { text: '使用指南' });
+    guide.createEl('p', { text: '选择模板、字体和字号后查看图卡。正文可用 --- 手动分页；图片完整显示。上传头像和封面，账号资料在「更多设置」中修改。用左右箭头切换页面，再下载当前页 PNG 或导出全部页面；原笔记不会被改写。' });
+    const about = footer.createEl('button', { text: '关于酸奶糖' });
+    about.onclick = () => new RedNoteAboutModal(this.deps.app, this.manager.getSettings()).open();
+    const single = footer.createEl('button', { text: '下载当前页 PNG' });
+    const all = footer.createEl('button', { text: '导出全部页 ZIP' });
+    single.disabled = all.disabled = this.busy || !this.content;
+    single.onclick = () => void this.exportImages(false);
+    all.onclick = () => void this.exportImages(true);
+  }
+
+  private async exportImages(all: boolean): Promise<void> {
+    if (this.busy || !this.content || !this.preview) return;
+    const content = this.content;
+    const preview = this.preview;
+    const sections = [...preview.querySelectorAll('.ailu-rednote-content-section')];
+    const page = Math.max(0, sections.findIndex(section => section.classList.contains('ailu-rednote-section-active')));
+    this.busy = true; this.deps.requestRender();
+    try {
+      this.assertSource();
+      if (await readRedNoteSource(this.deps.app, this.deps.file) !== this.source) throw new Error('文章已变化，请先刷新图卡后再导出。');
+      const result = all ? await this.exporter.export(content, this.context())
+        : await this.exporter.exportCurrentPage(content, this.context(), page);
+      if (!result.success) throw new Error(result.message);
+      new Notice(result.message);
+    } catch (error) { this.error = error instanceof Error ? error.message : '图卡导出失败。'; new Notice(this.error); }
+    finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
+  }
+}

@@ -281,7 +281,7 @@ export class RedNotePublishingPanel {
     const actions = toolbar.createDiv({ cls: 'ailu-rednote-toolbar-actions' });
     const refresh = this.createToolbarButton(actions, 'refresh-cw', '刷新');
     refresh.disabled = this.busy; refresh.onclick = () => void this.refresh();
-    for (const [field, label, icon] of [['userAvatar', '头像', 'circle-user-round'], ['coverImage', '封面', 'image']] as const) {
+    for (const [field, label, icon] of [['userAvatar', '头像', 'circle-user-round']] as const) {
       const button = this.createToolbarButton(actions, icon, label); button.disabled = this.busy;
       button.onclick = () => { void (async () => {
         try { const image = await chooseRedNoteImage(); if (image) await this.updateSettings({ [field]: image }); }

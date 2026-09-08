@@ -274,19 +274,7 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
       this.pickSummary(metadata) ||
       this.buildSummary(sections) ||
       '在 Obsidian 中完成写作、排版与分发。';
-    const coverImageSrc = await this.pickCoverImage(doc, context, metadata, settings);
-
     const cards: RedNoteCard[] = [];
-
-    if (template.showCover) {
-      cards.push({
-        kind: 'cover',
-        title,
-        summary,
-        coverImageSrc,
-        fileName: `${sanitizeFileName(title)}-01-封面.png`,
-      });
-    }
 
     const contentCards = this.paginateSections(sections, settings, template);
 
@@ -299,11 +287,10 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
       });
     }
 
-    const pageOffset = cards.length;
     contentCards.forEach((card, index) => {
       cards.push({
         ...card,
-        fileName: `${sanitizeFileName(title)}-${String(index + pageOffset + 1).padStart(2, '0')}-${sanitizeFileName(card.title)}.png`,
+        fileName: `${sanitizeFileName(title)}-${String(index + 1).padStart(2, '0')}-${sanitizeFileName(card.title)}.png`,
       });
     });
 
@@ -323,25 +310,6 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
     }
 
     return '';
-  }
-
-  private async pickCoverImage(
-    doc: Document,
-    context: PlatformRenderContext,
-    metadata: Record<string, unknown>,
-    settings: RedNoteSettings
-  ): Promise<string | null> {
-    if (settings.coverImage) {
-      return settings.coverImage;
-    }
-
-    const configuredImage = this.pickString(metadata, ['cover_image', 'cover', 'image']);
-    if (configuredImage) {
-      return this.imageResolver.resolveImageSrc(configuredImage, context.sourceFile);
-    }
-
-    const firstImage = doc.querySelector('img');
-    return firstImage?.getAttribute('src') || null;
   }
 
   private extractSections(

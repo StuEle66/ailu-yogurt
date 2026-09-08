@@ -111,9 +111,9 @@ const baseMinimalVariables: Record<string, string> = {
 export const REDNOTE_TEMPLATE_PRESETS: Record<string, RedNoteTemplatePreset> = {
   'jacky-cover': createTemplate(
     'jacky-cover',
-    '酸奶糖封面',
-    '大图封面 + 极简白色内容页',
-    true,
+    '酸奶糖',
+    '极简白色内容页',
+    false,
     {
       ...baseMinimalVariables,
       '--rn-header-badge-bg': 'rgba(15, 23, 42, 0.06)',

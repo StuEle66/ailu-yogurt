@@ -8907,7 +8907,7 @@ button.ailu-feishu-destination-tree-main:focus-visible {
 
   .ailu-rednote-toolbar-actions {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .ailu-rednote-icon-button.is-icon-only {

@@ -403,8 +403,7 @@ export class AiluSettingTab extends PluginSettingTab {
     new Setting(section).setName('图卡字号').addSlider(slider => slider.setLimits(12, 28, 1)
       .setValue(settings.fontSize).setDynamicTooltip().onChange(value => update({ fontSize: value })));
     for (const [key, label] of [
-      ['userName', '账号名称'], ['userId', '账号 ID'], ['notesTitle', '封面标题'],
-      ['brandTagline', '封面介绍'], ['footerLeftText', '页脚左侧'], ['footerRightText', '页脚右侧'],
+      ['userName', '账号名称'], ['userId', '账号 ID'], ['footerLeftText', '页脚左侧'], ['footerRightText', '页脚右侧'],
       ['aboutTitle', '关于标题'], ['aboutBio', '关于简介'], ['aboutCallout', '关于说明'],
       ['supportTitle', '支持页标题'], ['supportText', '支持页正文'],
       ['officialTitle', '公众号页标题'], ['officialText', '公众号页正文'], ['timeFormat', '日期地区格式'],
@@ -412,7 +411,7 @@ export class AiluSettingTab extends PluginSettingTab {
       new Setting(section).setName(label).addText(text => text.setValue(settings[key]).onChange(value => update({ [key]: value })));
     }
     new Setting(section).setName('显示日期').addToggle(toggle => toggle.setValue(settings.showTime).onChange(value => update({ showTime: value })));
-    for (const [key, label] of [['userAvatar', '账号头像'], ['coverImage', '小红书封面图片'],
+    for (const [key, label] of [['userAvatar', '账号头像'],
       ['supportQrImage', '支持页二维码'], ['supportBannerImage', '支持页横幅'],
       ['officialQrImage', '公众号二维码'], ['officialBannerImage', '公众号横幅']] as const) {
       const setting = new Setting(section).setName(label).setDesc(settings[key] ? '已设置独立图片；原照片不会修改。' : '尚未设置图片。');

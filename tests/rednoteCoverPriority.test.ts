@@ -29,9 +29,9 @@ afterEach(() => {
   dom.window.close();
 });
 
-async function preparedCover(settingCover: string, metadata: Record<string, unknown>) {
+async function preparedCards(settingCover: string, metadata: Record<string, unknown>, templateId = 'jacky-cover') {
   const manager = new RedNoteSettingsManager({
-    load: async () => ({ rednote: { templateId: 'jacky-cover', coverImage: settingCover } }),
+    load: async () => ({ rednote: { templateId, coverImage: settingCover } }),
     save: async () => {},
   });
   await manager.load();
@@ -46,16 +46,32 @@ async function preparedCover(settingCover: string, metadata: Record<string, unkn
     '<h1>文章</h1><p>正文</p><img src="body-first.png">',
     { app, sourceFile, title: '文章' },
   );
-  return { cover: prepared.data?.cards[0]?.coverImageSrc, resolver };
+  return { prepared, settings: manager.getSettings() };
 }
 
-test('RedNote cover uses the saved image before article metadata and body images', async () => {
-  const result = await preparedCover('data:image/png;base64,setting', { cover_image: 'frontmatter.png' });
-  expect(result.cover).toBe('data:image/png;base64,setting');
-  expect(result.resolver.resolveImageSrc).not.toHaveBeenCalled();
+test('RedNote starts with body content even when legacy cover settings and metadata exist', async () => {
+  const metadata = { cover_image: 'frontmatter.png', cover: 'other.png', image: 'third.png' };
+  const result = await preparedCards('data:image/png;base64,setting', metadata);
+  expect(result.prepared.data?.cards.map(card => card.kind)).toEqual(['content']);
+  expect(result.prepared.data?.cards[0].fileName).toBe('文章-01-文章.png');
+  expect(result.prepared.data?.cards[0].bodyHtml).toContain('正文');
+  expect(result.prepared.data?.cards[0].bodyHtml).toContain('body-first.png');
+  expect(result.prepared.previewHtml).not.toContain('ailu-rednote-jacky-cover-section');
+  expect(result.settings.coverImage).toBe('data:image/png;base64,setting');
+  expect(metadata).toEqual({ cover_image: 'frontmatter.png', cover: 'other.png', image: 'third.png' });
 });
 
-test('RedNote cover falls back from article metadata to the first body image', async () => {
-  expect((await preparedCover('', { cover_image: 'frontmatter.png' })).cover).toBe('resolved:frontmatter.png');
-  expect((await preparedCover('', {})).cover).toBe('body-first.png');
+
+test('all thirteen templates preserve the body image and number content from 01', async () => {
+  const manager = new RedNoteSettingsManager({ load: async () => null, save: async () => {} });
+  const templates = manager.getTemplates();
+  expect(templates).toHaveLength(13);
+  for (const template of templates) {
+    const { prepared } = await preparedCards('', { cover_image: 'body-first.png' }, template.id);
+    expect(prepared.data?.cards.map(card => card.kind), template.id).toEqual(['content']);
+    expect(prepared.data?.cards[0].fileName, template.id).toBe('文章-01-文章.png');
+    const preview = new dom.window.DOMParser().parseFromString(prepared.previewHtml, 'text/html');
+    expect(preview.querySelectorAll('img[src="body-first.png"]'), template.id).toHaveLength(1);
+    expect(preview.querySelector('.ailu-rednote-jacky-cover-section'), template.id).toBeNull();
+  }
 });

@@ -145,6 +145,7 @@ export class RedNotePublishingPanel {
   private exporter: RedNoteExporter;
   private content: RedNoteContent | null = null;
   private source = '';
+  private currentPage = 0;
   private busy = false;
   private refreshRequested = false;
   private retryImportRequested = false;
@@ -256,7 +257,7 @@ export class RedNotePublishingPanel {
     heading.createDiv({ cls: 'ailu-rednote-workbench-title', text: '小红书图卡' });
     const pageStatus = heading.createDiv({
       cls: 'ailu-rednote-workbench-status',
-      text: this.busy ? '正在生成…' : this.content ? `1 / ${this.content.data?.cards.length ?? 0}` : '等待生成',
+      text: this.busy ? '正在生成…' : this.content ? `${this.currentPage + 1} / ${this.content.data?.cards.length ?? 0}` : '等待生成',
     });
     const controls = toolbar.createDiv({ cls: 'ailu-rednote-controls' });
     const templateField = controls.createDiv({ cls: 'ailu-rednote-control-field is-template' });
@@ -303,7 +304,10 @@ export class RedNotePublishingPanel {
     this.preview = panel.createDiv({ cls: 'ailu-rednote-preview', attr: { 'data-platform': 'rednote' } });
     if (this.content) {
       this.preview.appendChild(sanitizeHTMLToDom(this.content.previewHtml));
-      this.exporter.mountPreview(this.preview, this.content);
+      this.exporter.mountPreview(this.preview, this.content, this.context(), {
+        initialPage: this.currentPage,
+        onPageChange: page => { this.currentPage = page; },
+      });
       this.bindResponsivePreview(pageStatus);
     }
     const footer = panel.createDiv({ cls: 'ailu-rednote-panel-footer' });
@@ -391,9 +395,7 @@ export class RedNotePublishingPanel {
   private async exportImages(all: boolean): Promise<void> {
     if (this.busy || !this.content || !this.preview) return;
     const content = this.content;
-    const preview = this.preview;
-    const sections = [...preview.querySelectorAll('.ailu-rednote-content-section')];
-    const page = Math.max(0, sections.findIndex(section => section.classList.contains('ailu-rednote-section-active')));
+    const page = this.currentPage;
     this.busy = true; this.deps.requestRender();
     try {
       this.assertSource();

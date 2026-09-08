@@ -1,6 +1,8 @@
 import { JSDOM } from 'jsdom';
 import type { App, TFile } from 'obsidian';
 import { RedNoteExporter, RedNoteSettingsManager, ImageResolver, DEFAULT_REDNOTE_SETTINGS, getRedNoteTemplatePreset } from '../src/rednote';
+const clipboardState = vi.hoisted(() => ({ blob: undefined as Blob | undefined }));
+vi.mock('../src/rednote/exporters/clipboard', () => ({ writeImageToClipboard: async (blob: Blob) => { clipboardState.blob = blob; } }));
 const zipState = vi.hoisted(() => ({ files: [] as string[] }));
 vi.mock('obsidian', () => ({ Events: class { trigger() {} }, Modal: class {}, Notice: class {}, Component: class {}, TFile: class {} }));
 vi.mock('html-to-image', () => ({ toBlob: async (element: HTMLElement) => new Blob([JSON.stringify({
@@ -68,4 +70,43 @@ test('export all produces an ordered ZIP even when the article has one page', as
   expect(await exporter.export(content, context)).toMatchObject({ success: true });
   expect(fileName).toBe('Test-article-小红书图文.zip');
   expect(zipState.files).toEqual(['body-02.png']);
+});
+
+test('remounting a preview restores the selected page and reports subsequent navigation', () => {
+  const { exporter, content } = fixture();
+  const host = document.createElement('div');
+  host.innerHTML = '<div class="ailu-rednote-preview-wrapper"><div class="ailu-rednote-image-preview"></div><button data-rednote-nav="prev"></button><span class="ailu-rednote-page-indicator"></span><button data-rednote-nav="next"></button></div>';
+  for (let index = 0; index < 6; index++) {
+    const section = document.createElement('section');
+    section.className = 'ailu-rednote-content-section';
+    section.textContent = `Page ${index + 1}`;
+    host.querySelector('.ailu-rednote-image-preview')!.appendChild(section);
+  }
+  const pages: number[] = [];
+  const mount = exporter.mountPreview.bind(exporter);
+  mount(host, content, undefined, { initialPage: 4, onPageChange: page => pages.push(page) });
+  expect(host.querySelector('.ailu-rednote-section-active')?.textContent).toBe('Page 5');
+  (host.querySelector('[data-rednote-nav="next"]') as HTMLButtonElement).click();
+  expect(pages).toEqual([4, 5]);
+  const replacement = host.cloneNode(true) as HTMLElement;
+  mount(replacement, content, undefined, { initialPage: pages.at(-1)!, onPageChange: page => pages.push(page) });
+  expect(replacement.querySelector('.ailu-rednote-section-active')?.textContent).toBe('Page 6');
+  replacement.querySelectorAll('.ailu-rednote-content-section').forEach((el, index) => { if (index >= 3) el.remove(); });
+  const reduced = replacement.cloneNode(true) as HTMLElement;
+  mount(reduced, content, undefined, { initialPage: 5, onPageChange: page => pages.push(page) });
+  expect(reduced.querySelector('.ailu-rednote-section-active')?.textContent).toBe('Page 3');
+  expect(pages.at(-1)).toBe(2);
+});
+
+
+test('copying the selected card uses frozen prepared HTML rather than the scaled live preview', async () => {
+  const { exporter, content } = fixture();
+  const host = document.createElement('div');
+  host.innerHTML = '<div class="ailu-rednote-preview-wrapper"><button class="ailu-rednote-copy-button"></button><div class="ailu-rednote-image-preview"><section class="ailu-rednote-content-section">Live decoration</section><section class="ailu-rednote-content-section">Live decoration 2</section></div><button data-rednote-nav="prev"></button><span class="ailu-rednote-page-indicator"></span><button data-rednote-nav="next"></button></div>';
+  clipboardState.blob = undefined;
+  exporter.mountPreview(host, content, undefined, { initialPage: 1 });
+  (host.querySelector('.ailu-rednote-copy-button') as HTMLButtonElement).click();
+  await vi.waitFor(() => expect(clipboardState.blob).toBeDefined());
+  expect((JSON.parse(await clipboardState.blob!.text()) as { visible: string }).visible).toBe('Body page');
+  expect(document.body.children).toHaveLength(0);
 });

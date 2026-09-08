@@ -128,7 +128,9 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
 
   mountPreview(
     container: HTMLElement,
-    _content: PreparedPlatformContent<RedNotePreparedData>
+    content: PreparedPlatformContent<RedNotePreparedData>,
+    _context?: PlatformRenderContext,
+    options: { initialPage?: number; onPageChange?: (page: number) => void } = {},
   ): void {
     const wrapper = container.querySelector('.ailu-rednote-preview-wrapper');
     if (!wrapper) return;
@@ -144,11 +146,12 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
       return;
     }
 
-    let currentIndex = 0;
+    let currentIndex = Math.min(sections.length - 1, Math.max(0, Math.trunc(options.initialPage || 0)));
 
     const updateNavigation = () => {
       this.updatePreviewState(wrapper, currentIndex);
       indicator.textContent = `${currentIndex + 1}/${sections.length}`;
+      options.onPageChange?.(currentIndex);
       prevButton.classList.toggle('ailu-rednote-nav-hidden', currentIndex === 0);
       nextButton.classList.toggle('ailu-rednote-nav-hidden', currentIndex === sections.length - 1);
       imagePreview.classList.toggle(
@@ -173,8 +176,18 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
       void (async () => {
       copyButton.disabled = true;
       try {
-        const blob = await this.capturePreview(imagePreview);
-        await writeImageToClipboard(blob);
+        const surface = document.createElement('div');
+        surface.className = 'ailu-rednote-scope ailu-rednote-rednote-export-surface';
+        surface.innerHTML = content.previewHtml;
+        document.body.appendChild(surface);
+        try {
+          const fixedPreview = surface.querySelector<HTMLElement>('.ailu-rednote-image-preview');
+          if (!fixedPreview) throw new Error('图卡预览不存在，请刷新后重试。');
+          this.updatePreviewState(surface, currentIndex);
+          await this.delay(120);
+          const blob = await this.capturePreview(fixedPreview);
+          await writeImageToClipboard(blob);
+        } finally { surface.remove(); }
         new Notice('当前页已复制到剪贴板');
       } catch (error) {
         console.error('Copy rednote image failed:', error);

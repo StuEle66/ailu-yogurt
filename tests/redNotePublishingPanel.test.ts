@@ -58,6 +58,7 @@ test('failed persistence does not claim import success or replace defaults', asy
 
 
 import { MarkdownView, type App, type TFile } from 'obsidian';
+import * as redNotePanelModule from '../src/ui/redNotePublishingPanel';
 import { RedNotePublishingPanel, readRedNoteSource } from '../src/ui/redNotePublishingPanel';
 import { redNoteTemplateSettingsPatch } from '../src/ui/redNotePublishingPanel';
 import { REDNOTE_HANDWRITING_FONT } from '../src/rednote';
@@ -106,4 +107,27 @@ test('reports damaged legacy fields and retains usable defaults', async () => {
   await initializeRedNoteImport(settings, async () => JSON.stringify({ rednote: { userName: { invalid: true } } }), async () => {});
   expect(settings.redNoteImport.status).toBe('failed');
   expect(settings.rednote).toEqual({});
+});
+
+test('scales the fixed 450 by 600 preview to the available sidebar width without changing its ratio', () => {
+  const layout = (redNotePanelModule as unknown as {
+    redNotePreviewLayout?: (availableWidth: number) => { scale: number; width: number; height: number };
+  }).redNotePreviewLayout;
+  expect(layout).toBeTypeOf('function');
+  expect(layout?.(320)).toEqual({ scale: 320 / 450, width: 320, height: 320 * 4 / 3 });
+  expect(layout?.(420)).toEqual({ scale: 420 / 450, width: 420, height: 560 });
+  expect(layout?.(600)).toEqual({ scale: 1, width: 450, height: 600 });
+});
+
+test('adds footer safety space only for the part actually covered by the Obsidian status bar', () => {
+  const inset = (redNotePanelModule as unknown as {
+    redNoteStatusBarInset?: (
+      panel: Pick<DOMRect, 'left' | 'right' | 'bottom'>,
+      status: Pick<DOMRect, 'left' | 'right' | 'top'> | null,
+    ) => number;
+  }).redNoteStatusBarInset;
+  expect(inset).toBeTypeOf('function');
+  expect(inset?.({ left: 0, right: 500, bottom: 800 }, { left: 0, right: 1200, top: 776 })).toBe(24);
+  expect(inset?.({ left: 0, right: 500, bottom: 760 }, { left: 0, right: 1200, top: 776 })).toBe(0);
+  expect(inset?.({ left: 0, right: 500, bottom: 800 }, { left: 600, right: 1200, top: 776 })).toBe(0);
 });

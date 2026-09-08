@@ -10,11 +10,24 @@ const fontArtifacts = [
 ];
 
 describe('offline Rednote release contract', () => {
+  test('keeps the workbench inside its publishing grid column', () => {
+    const styles = fs.readFileSync('styles.css', 'utf8');
+    const shellRule = styles.match(/\.ailu-publishing-shell\s*\{([^}]*)\}/)?.[1] ?? '';
+    const panelRule = styles.match(/\.ailu-rednote-panel\.ailu-rednote-scope\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(shellRule).toContain('grid-template-columns: minmax(0, 1fr);');
+    expect(shellRule).toContain('min-width: 0;');
+    expect(panelRule).toContain('width: 100%;');
+    expect(panelRule).toContain('max-width: 100%;');
+    expect(panelRule).toContain('overflow: hidden;');
+  });
+
   test('keeps export controls clear of Obsidian status bar', () => {
     const styles = fs.readFileSync('styles.css', 'utf8');
-    expect(styles).toMatch(
-      /\.ailu-rednote-panel\.ailu-rednote-scope\s*\{[^}]*padding-bottom:\s*56px;/,
-    );
+    const panel = fs.readFileSync('src/ui/redNotePublishingPanel.ts', 'utf8');
+    expect(styles).toContain('padding: 8px 10px calc(8px + var(--ailu-rednote-safe-bottom));');
+    expect(styles).not.toMatch(/\.ailu-rednote-panel\.ailu-rednote-scope\s*\{[^}]*padding-bottom:\s*56px;/);
+    expect(panel).toContain("document.querySelector<HTMLElement>('.status-bar')");
+    expect(panel).toContain('redNoteStatusBarInset(viewport.getBoundingClientRect()');
   });
 
   test('ships the unchanged MDFlow font files with their original OFL notices', () => {

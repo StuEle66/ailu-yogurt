@@ -52,7 +52,7 @@ export async function initializeRedNoteImport(
   }
 }
 
-import { MarkdownView, Notice, sanitizeHTMLToDom, type App, type TFile } from 'obsidian';
+import { MarkdownView, Menu, Notice, sanitizeHTMLToDom, setIcon, type App, type TFile } from 'obsidian';
 import {
   RedNoteExporter, RedNoteSettingsManager, MarkdownConverter, ImageResolver,
   loadBundledFonts, RedNoteAboutModal, REDNOTE_HANDWRITING_FONT, type RedNoteSettings,
@@ -113,6 +113,31 @@ interface RedNotePanelDeps {
 
 type RedNoteContent = Awaited<ReturnType<RedNoteExporter['prepare']>>;
 
+const REDNOTE_PREVIEW_WIDTH = 450;
+const REDNOTE_PREVIEW_HEIGHT = 600;
+
+export function redNotePreviewLayout(availableWidth: number): {
+  scale: number;
+  width: number;
+  height: number;
+} {
+  const safeWidth = Number.isFinite(availableWidth) ? Math.max(0, availableWidth) : 0;
+  const scale = Math.min(1, safeWidth / REDNOTE_PREVIEW_WIDTH);
+  return {
+    scale,
+    width: REDNOTE_PREVIEW_WIDTH * scale,
+    height: REDNOTE_PREVIEW_HEIGHT * scale,
+  };
+}
+
+export function redNoteStatusBarInset(
+  panel: Pick<DOMRect, 'left' | 'right' | 'bottom'>,
+  status: Pick<DOMRect, 'left' | 'right' | 'top'> | null,
+): number {
+  if (!status || panel.right <= status.left || panel.left >= status.right) return 0;
+  return Math.max(0, Math.min(80, panel.bottom - status.top));
+}
+
 export class RedNotePublishingPanel {
   private manager: RedNoteSettingsManager;
   private converter: MarkdownConverter;
@@ -128,6 +153,9 @@ export class RedNotePublishingPanel {
   private fontCleanup: (() => void) | null = null;
   private readonly sourcePath: string;
   private preview: HTMLElement | null = null;
+  private previewResizeObserver: ResizeObserver | null = null;
+  private pageIndicatorObserver: MutationObserver | null = null;
+  private safeAreaResizeObserver: ResizeObserver | null = null;
 
   constructor(private readonly deps: RedNotePanelDeps) {
     this.sourcePath = deps.file.path;
@@ -156,6 +184,7 @@ export class RedNotePublishingPanel {
     this.refreshRequested = false;
     this.retryImportRequested = false;
     this.converter.dispose();
+    this.disconnectRenderObservers();
     this.fontCleanup?.();
     this.fontCleanup = null;
   }
@@ -219,55 +248,142 @@ export class RedNotePublishingPanel {
   }
 
   async render(parent: HTMLElement): Promise<void> {
+    this.disconnectRenderObservers();
     const panel = parent.createDiv({ cls: 'ailu-rednote-panel ailu-rednote-scope' });
-    const controls = panel.createDiv({ cls: 'ailu-rednote-controls' });
-    const template = controls.createEl('select', { attr: { 'aria-label': '小红书模板' } });
+    const toolbar = panel.createDiv({ cls: 'ailu-rednote-workbench-toolbar' });
+    const heading = toolbar.createDiv({ cls: 'ailu-rednote-workbench-heading' });
+    heading.createDiv({ cls: 'ailu-rednote-workbench-title', text: '小红书图卡' });
+    const pageStatus = heading.createDiv({
+      cls: 'ailu-rednote-workbench-status',
+      text: this.busy ? '正在生成…' : this.content ? `1 / ${this.content.data?.cards.length ?? 0}` : '等待生成',
+    });
+    const controls = toolbar.createDiv({ cls: 'ailu-rednote-controls' });
+    const templateField = controls.createDiv({ cls: 'ailu-rednote-control-field is-template' });
+    templateField.createEl('label', { text: '模板' });
+    const template = templateField.createEl('select', { attr: { 'aria-label': '小红书模板' } });
     for (const preset of this.manager.getTemplates()) template.createEl('option', { value: preset.id, text: preset.name });
     template.value = this.manager.getSettings().templateId;
     template.disabled = this.busy;
     template.onchange = () => void this.updateSettings(redNoteTemplateSettingsPatch(template.value));
-    const font = controls.createEl('select', { attr: { 'aria-label': '小红书字体' } });
+    const fontField = controls.createDiv({ cls: 'ailu-rednote-control-field is-font' });
+    fontField.createEl('label', { text: '字体' });
+    const font = fontField.createEl('select', { attr: { 'aria-label': '小红书字体' } });
     for (const option of this.manager.getFontOptions()) font.createEl('option', { value: option.value, text: option.label });
     font.value = this.manager.getSettings().fontFamily; font.disabled = this.busy;
     font.onchange = () => void this.updateSettings({ fontFamily: font.value });
-    const size = controls.createEl('input', { type: 'number', attr: { 'aria-label': '小红书字号', min: '12', max: '28' } });
+    const sizeField = controls.createDiv({ cls: 'ailu-rednote-control-field is-size' });
+    sizeField.createEl('label', { text: '字号' });
+    const size = sizeField.createEl('input', { type: 'number', attr: { 'aria-label': '小红书字号', min: '12', max: '28' } });
     size.value = String(this.manager.getSettings().fontSize); size.disabled = this.busy;
     size.onchange = () => void this.updateSettings({ fontSize: Number(size.value) });
-    const refresh = controls.createEl('button', { text: '刷新图卡' });
+    const actions = toolbar.createDiv({ cls: 'ailu-rednote-toolbar-actions' });
+    const refresh = this.createToolbarButton(actions, 'refresh-cw', '刷新');
     refresh.disabled = this.busy; refresh.onclick = () => void this.refresh();
-    for (const [field, label] of [['userAvatar', '上传头像'], ['coverImage', '上传封面']] as const) {
-      const button = controls.createEl('button', { text: label }); button.disabled = this.busy;
+    for (const [field, label, icon] of [['userAvatar', '头像', 'circle-user-round'], ['coverImage', '封面', 'image']] as const) {
+      const button = this.createToolbarButton(actions, icon, label); button.disabled = this.busy;
       button.onclick = () => { void (async () => {
         try { const image = await chooseRedNoteImage(); if (image) await this.updateSettings({ [field]: image }); }
         catch (error) { new Notice(error instanceof Error ? error.message : '图片选择失败。'); }
       })(); };
     }
-    const more = controls.createEl('button', { text: '更多设置' });
-    more.onclick = this.deps.openSettings;
+    const settings = this.createToolbarButton(actions, 'settings-2', '设置');
+    settings.onclick = this.deps.openSettings;
+    const more = this.createToolbarButton(actions, 'ellipsis', '更多', true);
+    more.onclick = event => this.openMoreMenu(event, more);
     const importState = this.deps.getSettings().redNoteImport;
     if (importState.status === 'failed') {
-      panel.createEl('p', { text: `旧设置导入失败，当前使用默认或已保存设置：${importState.error}` });
+      const warning = panel.createDiv({ cls: 'ailu-rednote-inline-status is-warning' });
+      warning.createSpan({ text: `旧设置导入失败：${importState.error}` });
       const retry = panel.createEl('button', { text: '重试导入旧设置' });
+      warning.appendChild(retry);
       retry.disabled = this.busy; retry.onclick = () => void this.refresh(true);
     }
-    if (this.error) panel.createEl('p', { cls: 'ailu-rednote-error', text: this.error });
-    if (this.busy) panel.createEl('p', { text: '正在处理图卡，请稍候…' });
-    this.preview = panel.createDiv({ cls: 'ailu-rednote-preview' });
+    if (this.error) panel.createDiv({ cls: 'ailu-rednote-inline-status is-error', text: this.error });
+    this.preview = panel.createDiv({ cls: 'ailu-rednote-preview', attr: { 'data-platform': 'rednote' } });
     if (this.content) {
       this.preview.appendChild(sanitizeHTMLToDom(this.content.previewHtml));
       this.exporter.mountPreview(this.preview, this.content);
+      this.bindResponsivePreview(pageStatus);
     }
     const footer = panel.createDiv({ cls: 'ailu-rednote-panel-footer' });
-    const guide = footer.createEl('details');
-    guide.createEl('summary', { text: '使用指南' });
-    guide.createEl('p', { text: '选择模板、字体和字号后查看图卡。正文可用 --- 手动分页；图片完整显示。上传头像和封面，账号资料在「更多设置」中修改。用左右箭头切换页面，再下载当前页 PNG 或导出全部页面；原笔记不会被改写。' });
-    const about = footer.createEl('button', { text: '关于酸奶糖' });
-    about.onclick = () => new RedNoteAboutModal(this.deps.app, this.manager.getSettings()).open();
-    const single = footer.createEl('button', { text: '下载当前页 PNG' });
-    const all = footer.createEl('button', { text: '导出全部页 ZIP' });
+    const single = this.createToolbarButton(footer, 'image-down', '当前页 PNG');
+    const all = this.createToolbarButton(footer, 'archive', '全部页 ZIP');
+    all.addClass('mod-cta');
     single.disabled = all.disabled = this.busy || !this.content;
     single.onclick = () => void this.exportImages(false);
     all.onclick = () => void this.exportImages(true);
+    this.bindFooterSafeArea(panel, parent);
+  }
+
+  private createToolbarButton(parent: HTMLElement, iconName: string, label: string, iconOnly = false): HTMLButtonElement {
+    const button = parent.createEl('button', {
+      cls: iconOnly ? 'ailu-rednote-icon-button is-icon-only' : 'ailu-rednote-icon-button',
+      attr: { type: 'button', 'aria-label': label, title: label },
+    });
+    const icon = button.createSpan({ cls: 'ailu-rednote-button-icon' });
+    setIcon(icon, iconName);
+    if (!iconOnly) button.createSpan({ cls: 'ailu-rednote-button-label', text: label });
+    return button;
+  }
+
+  private openMoreMenu(event: MouseEvent, trigger: HTMLElement): void {
+    const menu = new Menu();
+    menu.addItem(item => item.setTitle('使用指南').setIcon('circle-help').onClick(() => {
+      new Notice('正文可用 --- 手动分页。用左右箭头切换页面，再导出当前页 PNG 或全部页 ZIP；原笔记不会被改写。', 10_000);
+    }));
+    menu.addItem(item => item.setTitle('关于酸奶糖').setIcon('badge-info').onClick(() => {
+      new RedNoteAboutModal(this.deps.app, this.manager.getSettings()).open();
+    }));
+    if (typeof menu.showAtMouseEvent === 'function') menu.showAtMouseEvent(event);
+    else menu.showAtPosition({ x: trigger.getBoundingClientRect().left, y: trigger.getBoundingClientRect().bottom });
+  }
+
+  private bindResponsivePreview(pageStatus: HTMLElement): void {
+    if (!this.preview) return;
+    const wrapper = this.preview.querySelector<HTMLElement>('.ailu-rednote-preview-wrapper');
+    const container = wrapper?.querySelector<HTMLElement>('.ailu-rednote-preview-container');
+    const indicator = wrapper?.querySelector<HTMLElement>('.ailu-rednote-page-indicator');
+    if (!wrapper || !container) return;
+    const viewport = document.createElement('div');
+    viewport.className = 'ailu-rednote-preview-scale-viewport';
+    container.before(viewport);
+    viewport.appendChild(container);
+    const updateScale = (): void => {
+      const availableWidth = viewport.getBoundingClientRect().width || viewport.clientWidth;
+      const layout = redNotePreviewLayout(availableWidth);
+      viewport.style.height = `${layout.height}px`;
+      container.style.setProperty('--ailu-rednote-preview-scale', String(layout.scale));
+    };
+    this.previewResizeObserver = new ResizeObserver(updateScale);
+    this.previewResizeObserver.observe(viewport);
+    updateScale();
+    if (indicator) {
+      const updatePageStatus = (): void => { pageStatus.setText(indicator.textContent?.trim() || '图卡'); };
+      this.pageIndicatorObserver = new MutationObserver(updatePageStatus);
+      this.pageIndicatorObserver.observe(indicator, { childList: true, characterData: true, subtree: true });
+      updatePageStatus();
+    }
+  }
+
+  private bindFooterSafeArea(panel: HTMLElement, viewport: HTMLElement): void {
+    const statusBar = document.querySelector<HTMLElement>('.status-bar');
+    const update = (): void => {
+      const inset = redNoteStatusBarInset(viewport.getBoundingClientRect(), statusBar?.getBoundingClientRect() ?? null);
+      panel.style.setProperty('--ailu-rednote-safe-bottom', `${inset}px`);
+    };
+    this.safeAreaResizeObserver = new ResizeObserver(update);
+    this.safeAreaResizeObserver.observe(viewport);
+    if (statusBar) this.safeAreaResizeObserver.observe(statusBar);
+    update();
+  }
+
+  private disconnectRenderObservers(): void {
+    this.previewResizeObserver?.disconnect();
+    this.previewResizeObserver = null;
+    this.pageIndicatorObserver?.disconnect();
+    this.pageIndicatorObserver = null;
+    this.safeAreaResizeObserver?.disconnect();
+    this.safeAreaResizeObserver = null;
   }
 
   private async exportImages(all: boolean): Promise<void> {

@@ -131,3 +131,10 @@ test('adds footer safety space only for the part actually covered by the Obsidia
   expect(inset?.({ left: 0, right: 500, bottom: 760 }, { left: 0, right: 1200, top: 776 })).toBe(0);
   expect(inset?.({ left: 0, right: 500, bottom: 800 }, { left: 600, right: 1200, top: 776 })).toBe(0);
 });
+
+test('fits the full card in a wide but short preview region', () => {
+  const layout = redNotePanelModule.redNotePreviewLayout as (width: number, height: number) => { width: number; height: number; scale: number };
+  expect(layout(900, 360)).toEqual({ scale: 0.6, width: 270, height: 360 });
+  expect(layout(320, 600).width).toBe(320);
+  expect(layout(900, 0)).toEqual({ scale: 0, width: 0, height: 0 });
+});

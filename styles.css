@@ -8938,3 +8938,52 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   }
 }
 /* END AILU REDNOTE STYLES */
+
+/* The preview region owns the available height; scaled cards never size it. */
+.ailu-publishing-shell:has(> .ailu-rednote-panel) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.ailu-rednote-panel.ailu-rednote-scope {
+  height: 100%;
+  min-height: 0;
+}
+
+.ailu-rednote-panel > .ailu-rednote-workbench-toolbar,
+.ailu-rednote-panel > .ailu-rednote-inline-status,
+.ailu-rednote-panel > .ailu-rednote-panel-footer {
+  flex: none;
+  position: relative;
+}
+
+.ailu-rednote-panel > .ailu-rednote-preview {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 8px;
+}
+
+.ailu-rednote-panel .ailu-rednote-preview > .ailu-rednote-scope {
+  height: 100%;
+  min-height: 0;
+}
+
+.ailu-rednote-panel .ailu-rednote-preview-wrapper {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  gap: 6px;
+}
+
+.ailu-rednote-panel .ailu-rednote-preview-scale-viewport {
+  height: 100%;
+  min-height: 0;
+  transition: none;
+}
+
+.ailu-rednote-panel .ailu-rednote-nav-container {
+  position: static;
+  margin: 0 auto;
+  flex: none;
+}

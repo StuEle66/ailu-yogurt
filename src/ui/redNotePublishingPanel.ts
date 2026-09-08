@@ -116,13 +116,14 @@ type RedNoteContent = Awaited<ReturnType<RedNoteExporter['prepare']>>;
 const REDNOTE_PREVIEW_WIDTH = 450;
 const REDNOTE_PREVIEW_HEIGHT = 600;
 
-export function redNotePreviewLayout(availableWidth: number): {
+export function redNotePreviewLayout(availableWidth: number, availableHeight = REDNOTE_PREVIEW_HEIGHT): {
   scale: number;
   width: number;
   height: number;
 } {
   const safeWidth = Number.isFinite(availableWidth) ? Math.max(0, availableWidth) : 0;
-  const scale = Math.min(1, safeWidth / REDNOTE_PREVIEW_WIDTH);
+  const safeHeight = Number.isFinite(availableHeight) ? Math.max(0, availableHeight) : 0;
+  const scale = Math.min(1, safeWidth / REDNOTE_PREVIEW_WIDTH, safeHeight / REDNOTE_PREVIEW_HEIGHT);
   return {
     scale,
     width: REDNOTE_PREVIEW_WIDTH * scale,
@@ -350,8 +351,9 @@ export class RedNotePublishingPanel {
     viewport.appendChild(container);
     const updateScale = (): void => {
       const availableWidth = viewport.getBoundingClientRect().width || viewport.clientWidth;
-      const layout = redNotePreviewLayout(availableWidth);
-      viewport.style.height = `${layout.height}px`;
+      const availableHeight = viewport.getBoundingClientRect().height;
+      if (!viewport.isConnected || availableWidth <= 0 || availableHeight <= 0) return;
+      const layout = redNotePreviewLayout(availableWidth, availableHeight);
       container.style.setProperty('--ailu-rednote-preview-scale', String(layout.scale));
     };
     this.previewResizeObserver = new ResizeObserver(updateScale);

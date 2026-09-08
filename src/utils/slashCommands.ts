@@ -8,6 +8,7 @@ import { curatedCreativeSkill } from '../skill/curatedCreativeSkills';
 
 export interface SlashCommand {
   id: string;
+  skillName?: string;
   label: string;
   insertText: string;
   description: string;
@@ -26,6 +27,7 @@ export async function loadChatSkills(
     const displayName = curated?.displayName ?? skill.name;
     return {
       id: skill.filePath,
+      skillName: skill.name,
       label: `/${displayName}`,
       insertText: buildSkillInvocationPrompt(skill),
       description: [displayName !== skill.name ? skill.name : '', skill.sourceLabel, truncate(skill.description, 120)]

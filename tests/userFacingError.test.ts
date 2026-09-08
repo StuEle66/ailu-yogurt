@@ -3,6 +3,7 @@ import {
   rawErrorMessage,
   userFacingErrorMessage,
   userFacingErrorText,
+  userFacingRuntimeErrorText,
 } from '../src/utils/userFacingError';
 
 describe('user-facing error localization', () => {
@@ -38,6 +39,8 @@ describe('user-facing error localization', () => {
     ['EACCES: permission denied', '没有访问所需文件或目录的权限。'],
     ['request timed out', '操作超时，请稍后重试。'],
     ['HTTP 429 Too Many Requests', '请求过于频繁，请稍后重试。'],
+    ['Codex App Server stdout frame exceeded the safe byte limit.', 'Codex 返回的单条消息过大，已安全停止本次回合。'],
+    ['session 123 is archived. Run `codex unarchive 123` to unarchive it first.', 'Codex 会话已归档，请新建对话后继续。'],
   ])('translates common technical failure %s', (input, expected) => {
     expect(userFacingErrorText(input)).toBe(expected);
   });
@@ -45,6 +48,17 @@ describe('user-facing error localization', () => {
   test('keeps an existing Chinese explanation intact', () => {
     expect(userFacingErrorText('当前文章已经发生变化，请重新检查。'))
       .toBe('当前文章已经发生变化，请重新检查。');
+  });
+
+  test('uses official Codex error codes for stable Chinese failure reasons', () => {
+    expect(userFacingRuntimeErrorText(
+      'codex_response_too_many_failed_attempts',
+      'unexpected provider wording',
+    )).toBe('Codex 已完成 5 次重连，连接仍未恢复。请检查网络或本地代理后重试。');
+    expect(userFacingRuntimeErrorText(
+      'codex_unauthorized',
+      'unexpected provider wording',
+    )).toBe('Codex 身份验证失败，请重新检查账号授权。');
   });
 
   test('never exposes an unknown English-only technical message', () => {

@@ -6,6 +6,8 @@ import {
   type ChatContextService,
   type ChatConversationSnapshot,
   type ChatConversationWatch,
+  type ChatRunProgress,
+  type ChatRunRetryMode,
   type ChatRunCoordinator,
 } from '../chat';
 import { AILU_IDS, DEFAULT_CONVERSATION_TITLE, PLUGIN_NAME, VIEW_IDS } from '../ids';
@@ -197,6 +199,13 @@ interface RenderedMessageRecord extends ChatMessageRenderFingerprint {
   item: HTMLElement;
 }
 
+interface FailedRunRetryAction {
+  mode: ChatRunRetryMode;
+  prompt: string;
+  agentId: AgentId;
+  skillName?: string;
+}
+
 const MAX_CHAT_CONTEXT_FILE_BYTES = 10 * 1024 * 1024;
 
 export class AiluChatView extends ItemView {
@@ -228,6 +237,10 @@ export class AiluChatView extends ItemView {
   private contextTrackingRegistered = false;
   private contextRowEl: HTMLElement | null = null;
   private contextHandoffHintEl: HTMLElement | null = null;
+  private runtimeProgressEl: HTMLElement | null = null;
+  private runtimeProgressTextEl: HTMLElement | null = null;
+  private runtimeProgress: ChatRunProgress | null = null;
+  private readonly failedRunRetryActions = new Map<string, FailedRunRetryAction>();
   private activeEditorContext: ActiveEditorContext | null = null;
   private observedMarkdownView: MarkdownView | null = null;
   private dismissedContextSignature: string | null = null;
@@ -617,6 +630,12 @@ export class AiluChatView extends ItemView {
 
     this.contextHandoffHintEl = inputWrapper.createDiv({ cls: 'ailu-context-handoff-hint' });
     this.refreshContextHandoffHint();
+
+    this.runtimeProgressEl = inputWrapper.createDiv({ cls: 'ailu-runtime-progress' });
+    const runtimeProgressIcon = this.runtimeProgressEl.createSpan({ cls: 'ailu-runtime-progress-icon' });
+    setIcon(runtimeProgressIcon, 'refresh-cw');
+    this.runtimeProgressTextEl = this.runtimeProgressEl.createSpan();
+    this.registerInterval(window.setInterval(() => this.renderRuntimeProgress(), 1_000));
 
     this.inputEl = inputWrapper.createEl('textarea', {
       cls: 'ailu-input',
@@ -2173,6 +2192,8 @@ export class AiluChatView extends ItemView {
   private applyConversationSnapshot(snapshot: ChatConversationSnapshot): void {
     if (this.conversation?.id !== snapshot.conversationId) return;
     this.syncLiveAssistantMessageIds(snapshot);
+    this.syncFailedRunRetryActions(snapshot);
+    this.updateRuntimeProgress(snapshot);
     if (snapshot.loadError) {
       this.conversationLoadError = snapshot.loadError;
       this.running = snapshot.running;
@@ -2219,6 +2240,38 @@ export class AiluChatView extends ItemView {
       if (run.phase === 'completed' || run.phase === 'cancelled' || run.phase === 'failed') continue;
       this.liveAssistantMessageIds.add(run.assistantMessage.id);
     }
+  }
+
+  private syncFailedRunRetryActions(snapshot: ChatConversationSnapshot): void {
+    this.failedRunRetryActions.clear();
+    for (const run of snapshot.runs) {
+      if (!run.retryMode || run.terminalStatus !== 'failed') continue;
+      this.failedRunRetryActions.set(run.assistantMessage.id, {
+        mode: run.retryMode,
+        prompt: run.userMessage.content,
+        agentId: run.userMessage.agentId ?? run.assistantMessage.agentId ?? this.agentId,
+        skillName: run.userMessage.metadata?.selectedSkillName,
+      });
+    }
+  }
+
+  private updateRuntimeProgress(snapshot: ChatConversationSnapshot): void {
+    this.runtimeProgress = snapshot.runs.find(run => run.progress)?.progress ?? null;
+    this.renderRuntimeProgress();
+  }
+
+  private renderRuntimeProgress(): void {
+    if (!this.runtimeProgressEl || !this.runtimeProgressTextEl) return;
+    const progress = this.runtimeProgress;
+    this.runtimeProgressEl.toggleClass('is-visible', Boolean(progress));
+    if (!progress) {
+      this.runtimeProgressTextEl.setText('');
+      return;
+    }
+    const waitedSeconds = Math.max(0, Math.floor((Date.now() - progress.startedAt) / 1_000));
+    this.runtimeProgressTextEl.setText(
+      `正在重连 ${progress.attempt}/${progress.maxAttempts} · 已等待 ${waitedSeconds} 秒`,
+    );
   }
 
   private stopCurrentConversation(): void {
@@ -2464,6 +2517,8 @@ export class AiluChatView extends ItemView {
       this.renderTurnDuration(item, message.metadata.durationMs);
     }
     if (fingerprint.memoryActionAvailable) this.renderMemoryWriteAction(item, message);
+    const retryAction = this.failedRunRetryActions.get(message.id);
+    if (message.role === 'error' && retryAction) this.renderFailedRunRetryAction(item, retryAction);
     return {
       record: {
         item,
@@ -2530,6 +2585,42 @@ export class AiluChatView extends ItemView {
   private renderTurnDuration(parent: HTMLElement, durationMs: number): void {
     const seconds = Math.max(0, durationMs) / 1000;
     parent.createDiv({ cls: 'ailu-turn-duration', text: `总耗时 ${seconds.toFixed(1)}s` });
+  }
+
+  private renderFailedRunRetryAction(parent: HTMLElement, action: FailedRunRetryAction): void {
+    const actions = parent.createDiv({ cls: 'ailu-message-actions' });
+    const button = actions.createEl('button', {
+      cls: 'ailu-runtime-retry-button',
+      text: action.mode === 'direct' ? '重试本次' : '载入原问题',
+      attr: {
+        type: 'button',
+        'aria-label': action.mode === 'direct'
+          ? '重新发送这次只读或 Plan 请求'
+          : '载入原问题，由你确认后重新发送',
+      },
+    });
+    button.onclick = () => void this.restoreFailedRun(action);
+  }
+
+  private async restoreFailedRun(action: FailedRunRetryAction): Promise<void> {
+    if (this.running) {
+      new Notice('当前对话仍有任务在运行，请先等待或停止。');
+      return;
+    }
+    await this.switchAgent(action.agentId);
+    this.inputEl.value = action.prompt;
+    this.removeSkill();
+    if (action.skillName) {
+      const commands = await loadChatSkills(
+        action.agentId,
+        this.deps.getSettings().creativeSkillNames,
+      );
+      this.selectedSkill = commands.find(command => command.skillName === action.skillName) ?? null;
+      this.renderSkillPill();
+    }
+    this.captureCurrentConversationDraft();
+    this.inputEl.focus();
+    if (action.mode === 'direct') await this.sendMessage();
   }
 
   private renderMemoryWriteAction(parent: HTMLElement, message: ChatMessage): void {
@@ -2972,8 +3063,15 @@ export class AiluChatView extends ItemView {
       content: rawPrompt,
       createdAt: Date.now(),
       agentId,
-      ...(verifiedMemory.references.length > 0
-        ? { metadata: { memoryReferences: verifiedMemory.references } }
+      ...((verifiedMemory.references.length > 0 || skillAtSend)
+        ? {
+          metadata: {
+            ...(verifiedMemory.references.length > 0
+              ? { memoryReferences: verifiedMemory.references }
+              : {}),
+            ...(skillAtSend ? { selectedSkillName: skillAtSend.skillName } : {}),
+          },
+        }
         : {}),
     };
     const assistantMessage: ChatMessage = {

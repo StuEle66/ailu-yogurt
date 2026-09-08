@@ -5,6 +5,7 @@ import type {
   ChatTurnRequest,
   ConversationContextCheckpointDraft,
   RuntimeTurnEvent,
+  RuntimeErrorCode,
   StoredConversation,
   ToolCallEvent,
 } from '../types';
@@ -31,6 +32,15 @@ export type ChatRunPhase =
 
 export type ChatRunTerminalStatus = 'completed' | 'cancelled' | 'failed';
 export type ChatRunCancellationReason = 'stop' | 'shutdown';
+
+export interface ChatRunProgress {
+  kind: 'retrying';
+  attempt: number;
+  maxAttempts: number;
+  startedAt: number;
+}
+
+export type ChatRunRetryMode = 'direct' | 'reload';
 
 export type FrozenChatTurnRequest = Readonly<
   Omit<ChatTurnRequest, 'signal' | 'attachments'> & {
@@ -194,6 +204,7 @@ export interface ChatRunCoordinatorDependencies {
     message: string,
     detail: string | undefined,
     submission: FrozenChatRunSubmission,
+    code?: RuntimeErrorCode,
   ) => string;
   /** Privacy-safe local diagnostic hook; prompts and message text are excluded. */
   onPersistenceFailure?: (input: {
@@ -229,6 +240,9 @@ export interface ChatRunSnapshot {
   sessionId: string | null;
   cancellationReason: ChatRunCancellationReason | null;
   error: string | null;
+  runtimeErrorCode: RuntimeErrorCode | null;
+  progress: ChatRunProgress | null;
+  retryMode: ChatRunRetryMode | null;
   persistenceError: string | null;
   userMessage: ChatMessage;
   assistantMessage: ChatMessage;
@@ -296,6 +310,8 @@ export interface ChatRunResult {
   sessionId: string | null;
   cancellationReason: ChatRunCancellationReason | null;
   error: string | null;
+  runtimeErrorCode: RuntimeErrorCode | null;
+  progress: ChatRunProgress | null;
   persistenceError: string | null;
   startedAt: number | null;
   finishedAt: number;
@@ -374,6 +390,8 @@ interface RunRecord {
   durablyAdmittedSessionId: string | null;
   cancellationReason: ChatRunCancellationReason | null;
   error: string | null;
+  runtimeErrorCode: RuntimeErrorCode | null;
+  progress: ChatRunProgress | null;
   persistenceError: string | null;
   sessionPersistenceError: string | null;
   checkpointPersistenceError: string | null;
@@ -976,6 +994,7 @@ export class ChatRunCoordinator {
     }
     run.runtimeEventBytes += eventBytes;
     if (event.type === 'artifact') {
+      run.progress = null;
       if (run.artifactEventsAccepted >= CHAT_MAX_ARTIFACTS_PER_TURN) {
         this.recordArtifactFailure(
           lane,
@@ -1003,9 +1022,11 @@ export class ChatRunCoordinator {
         run.sideEffects.push(task);
       }
     } else if (event.type === 'text') {
+      run.progress = null;
       run.submission.assistantMessage.content += event.content;
       this.markCheckpointDirty(lane, run, utf8ByteLength(event.content));
     } else if (event.type === 'tool') {
+      run.progress = null;
       const formatted = this.deps.formatToolEvent
         ? this.deps.formatToolEvent(event.toolCall, run.submission)
         : `\n\n• ${event.toolCall.name} ${event.toolCall.status}`;
@@ -1016,10 +1037,23 @@ export class ChatRunCoordinator {
     } else if (event.type === 'diagnostic') {
       // RuntimeManager persists diagnostics to the local log. They are
       // intentionally excluded from assistant content and terminal status.
+      if (event.code === 'codex_stream_retrying') {
+        const match = `${event.message} ${event.detail ?? ''}`.match(/(\d+)\s*\/\s*(\d+)/);
+        if (match) {
+          run.progress = {
+            kind: 'retrying',
+            attempt: Number(match[1]),
+            maxAttempts: Number(match[2]),
+            startedAt: run.progress?.startedAt ?? this.now(),
+          };
+        }
+      }
     } else if (event.type === 'error') {
+      run.progress = null;
+      run.runtimeErrorCode = event.code ?? null;
       run.submission.assistantMessage.role = 'error';
       const detail = this.deps.formatRuntimeError
-        ? this.deps.formatRuntimeError(event.message, event.detail, run.submission)
+        ? this.deps.formatRuntimeError(event.message, event.detail, run.submission, event.code)
         : `${event.message}${event.detail ? `\n${event.detail}` : ''}`;
       deliveredEvent = { ...event, message: detail, detail: undefined };
       appendAssistantError(run.submission.assistantMessage, detail);
@@ -1028,6 +1062,7 @@ export class ChatRunCoordinator {
       run.acceptingRuntimeEvents = false;
       run.controller.abort(event);
     } else if (event.type === 'done') {
+      run.progress = null;
       if (event.sessionId) {
         const task = this.persistSession(lane, run, event.sessionId);
         run.sideEffects.push(task);
@@ -1823,6 +1858,9 @@ export class ChatRunCoordinator {
       sessionId: run.sessionId,
       cancellationReason: run.cancellationReason,
       error: run.error,
+      runtimeErrorCode: run.runtimeErrorCode,
+      progress: run.progress ? { ...run.progress } : null,
+      retryMode: retryModeFor(run),
       persistenceError: combinedPersistenceError(run),
       userMessage: cloneMessage(run.submission.userMessage),
       assistantMessage: cloneMessage(run.submission.assistantMessage),
@@ -1862,6 +1900,8 @@ export class ChatRunCoordinator {
       durablyAdmittedSessionId: null,
       cancellationReason: null,
       error: null,
+      runtimeErrorCode: null,
+      progress: null,
       persistenceError: null,
       sessionPersistenceError: null,
       checkpointPersistenceError: null,
@@ -2171,6 +2211,8 @@ export class ChatRunCoordinator {
       sessionId: run.sessionId,
       cancellationReason: run.cancellationReason,
       error: run.error,
+      runtimeErrorCode: run.runtimeErrorCode,
+      progress: run.progress ? { ...run.progress } : null,
       persistenceError: combinedPersistenceError(run),
       startedAt: run.startedAt,
       finishedAt: run.finishedAt ?? this.now(),
@@ -2452,6 +2494,22 @@ export function isChatConversationRunning(snapshot: ChatConversationSnapshot): b
 
 function isTerminalPhase(phase: ChatRunPhase): boolean {
   return isTerminalChatRunPhase(phase);
+}
+
+const RETRYABLE_RUNTIME_ERROR_CODES = new Set<RuntimeErrorCode>([
+  'codex_http_connection_failed',
+  'codex_response_stream_connection_failed',
+  'codex_response_stream_disconnected',
+  'codex_response_too_many_failed_attempts',
+  'codex_server_overloaded',
+  'codex_app_server_disconnected',
+]);
+
+function retryModeFor(run: RunRecord): ChatRunRetryMode | null {
+  if (!run.runtimeErrorCode || !RETRYABLE_RUNTIME_ERROR_CODES.has(run.runtimeErrorCode)) return null;
+  return run.submission.runtimeRequest.planMode || run.submission.runtimeRequest.textOnly
+    ? 'direct'
+    : 'reload';
 }
 
 function isCancellablePhase(phase: ChatRunPhase): boolean {

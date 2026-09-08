@@ -354,6 +354,58 @@ function upsertMessage(conversation: StoredConversation, message: ChatMessage): 
 }
 
 describe('ChatRunCoordinator', () => {
+  test('exposes retry progress only while a Codex stream is reconnecting', async () => {
+    const runtime = new FakeRuntime();
+    const persistence = new FakePersistence();
+    const coordinator = new ChatRunCoordinator(persistence.dependencies(runtime));
+    const handle = await coordinator.submit(submission('retry-progress', 'retry-progress-run'));
+    await waitForRuntime(runtime, 'retry-progress-run');
+
+    runtime.emit('retry-progress-run', {
+      type: 'diagnostic',
+      code: 'codex_stream_retrying',
+      message: 'Reconnecting... 2/5',
+    });
+    expect((await coordinator.snapshotConversation('retry-progress')).runs[0]).toMatchObject({
+      progress: { kind: 'retrying', attempt: 2, maxAttempts: 5 },
+    });
+
+    runtime.emit('retry-progress-run', { type: 'text', content: '已恢复' });
+    expect((await coordinator.snapshotConversation('retry-progress')).runs[0]?.progress).toBeNull();
+    runtime.finish('retry-progress-run', { type: 'done' });
+    await handle.completion;
+  });
+
+  test('retries only read-only failures directly and reloads write-capable prompts', async () => {
+    const runtime = new FakeRuntime();
+    const persistence = new FakePersistence();
+    const coordinator = new ChatRunCoordinator(persistence.dependencies(runtime));
+
+    const plan = submission('safe-retry', 'plan-retry-run');
+    plan.runtimeRequest.planMode = true;
+    const planHandle = await coordinator.submit(plan);
+    await waitForRuntime(runtime, 'plan-retry-run');
+    runtime.finish('plan-retry-run', {
+      type: 'error',
+      message: 'retry exhausted',
+      code: 'codex_response_too_many_failed_attempts',
+    }, { type: 'done' });
+    await planHandle.completion;
+    expect((await coordinator.snapshotConversation('safe-retry')).runs.at(-1)?.retryMode).toBe('direct');
+
+    const write = submission('safe-retry', 'write-retry-run');
+    write.runtimeRequest.fullAccess = true;
+    const writeHandle = await coordinator.submit(write);
+    await waitForRuntime(runtime, 'write-retry-run');
+    runtime.finish('write-retry-run', {
+      type: 'error',
+      message: 'retry exhausted',
+      code: 'codex_response_too_many_failed_attempts',
+    }, { type: 'done' });
+    await writeHandle.completion;
+    expect((await coordinator.snapshotConversation('safe-retry')).runs.at(-1)?.retryMode).toBe('reload');
+  });
+
   test('stores only localized Runtime failures when a UI formatter is configured', async () => {
     const runtime = new FakeRuntime();
     const persistence = new FakePersistence();

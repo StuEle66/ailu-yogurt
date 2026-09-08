@@ -49,7 +49,34 @@ export function userFacingErrorText(
   return raw || safeFallback;
 }
 
+export function userFacingRuntimeErrorText(
+  code: RuntimeErrorCode | undefined,
+  message: string | null | undefined,
+  detail?: string,
+): string {
+  const known: Partial<Record<RuntimeErrorCode, string>> = {
+    codex_http_connection_failed: 'Codex 网络连接失败，5 次重连仍未恢复。请检查网络或本地代理后重试。',
+    codex_response_stream_connection_failed: 'Codex 响应流连接失败，5 次重连仍未恢复。请稍后重试。',
+    codex_response_stream_disconnected: 'Codex 响应流中断，5 次重连仍未恢复。请稍后重试。',
+    codex_response_too_many_failed_attempts: 'Codex 已完成 5 次重连，连接仍未恢复。请检查网络或本地代理后重试。',
+    codex_usage_limit_exceeded: 'Codex 使用额度已用尽，请在额度恢复后重试。',
+    codex_rate_limit_exceeded: 'Codex 请求过于频繁，请稍后重试。',
+    codex_unauthorized: 'Codex 身份验证失败，请重新检查账号授权。',
+    codex_server_overloaded: 'Codex 服务当前繁忙，请稍后重试。',
+    codex_bad_request: 'Codex 无法处理本次请求，请检查输入后重试。',
+  };
+  if (code && known[code]) return known[code]!;
+  return userFacingErrorText(
+    [message, detail].filter(Boolean).join('：'),
+    '当前 Agent 执行失败，请查看本地诊断日志。',
+  );
+}
+
 function translateKnownError(raw: string): string | null {
+  if (/Codex App Server stdout frame exceeded the safe byte limit/i.test(raw)) {
+    return 'Codex 返回的单条消息过大，已安全停止本次回合。';
+  }
+  if (/session .+ is archived/i.test(raw)) return 'Codex 会话已归档，请新建对话后继续。';
   const anchor = raw.match(/anchors\[(\d+)]\.anchor\s+must\s+be\s+a\s+non-empty\s+string/i);
   if (anchor) {
     return `X Article 上传前检查失败：第 ${Number(anchor[1]) + 1} 个图片定位点不能为空。请检查该图片前后是否有可用的正文。`;
@@ -154,3 +181,4 @@ function normalizeFallback(value: string): string {
   if (normalized && HAN_CHARACTER.test(normalized)) return normalized;
   return DEFAULT_FALLBACK;
 }
+import type { RuntimeErrorCode } from '../types';

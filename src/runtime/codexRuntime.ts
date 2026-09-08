@@ -7,6 +7,7 @@ import type {
   CodexRuntimeStatus,
   RuntimeBinarySource,
   RuntimeTurnEvent,
+  RuntimeErrorCode,
   ToolCallEvent,
 } from '../types';
 import { PLUGIN_NAME, PROTOCOL_IDS } from '../ids';
@@ -1021,7 +1022,8 @@ export class CodexAppServerRuntime extends EventEmitter {
     const active = this.activeTurns.get(threadId);
     if (this.safetyDisconnectRequired) return;
     if (!active || active.finished) return;
-    const eventBytes = jsonByteLength({ method, params });
+    const deliverableParams = compactSuccessfulImageGeneration(method, params);
+    const eventBytes = jsonByteLength({ method, params: deliverableParams });
     if (!Number.isFinite(eventBytes) || eventBytes > CODEX_MAX_RUNTIME_EVENT_BYTES) {
       this.disconnectForOutputLimit(active, 'event');
       return;
@@ -1032,10 +1034,10 @@ export class CodexAppServerRuntime extends EventEmitter {
     }
     active.notificationBytes += eventBytes;
     if (!active.turnId) {
-      active.bufferedNotifications.push({ method, params });
+      active.bufferedNotifications.push({ method, params: deliverableParams });
       return;
     }
-    this.deliverNotification(active, method, params);
+    this.deliverNotification(active, method, deliverableParams);
   }
 
   private disconnectForOutputLimit(active: ActiveTurn, kind: 'event' | 'turn'): void {
@@ -1095,7 +1097,7 @@ export class CodexAppServerRuntime extends EventEmitter {
       const error = recordAt(params, 'error');
       const message = stringAt(error, 'message') ?? 'Codex 回合失败。';
       const detail = stringAt(error, 'additionalDetails') ?? undefined;
-      const statusCode = numberAt(error, 'codexErrorInfo', 'httpStatusCode') ?? undefined;
+      const metadata = codexErrorMetadata(error);
       if (valueAt(params, 'willRetry') === true) {
         // App Server uses the same `error` notification for transient stream
         // failures and terminal failures. `willRetry=true` means Codex still
@@ -1115,7 +1117,8 @@ export class CodexAppServerRuntime extends EventEmitter {
         type: 'error',
         message,
         detail,
-        statusCode,
+        statusCode: metadata.statusCode,
+        code: metadata.code,
       });
       return;
     }
@@ -1135,6 +1138,7 @@ export class CodexAppServerRuntime extends EventEmitter {
           type: 'error',
           message: stringAt(error, 'message') ?? 'Codex 回合失败。',
           detail: stringAt(error, 'additionalDetails') ?? undefined,
+          ...codexErrorMetadata(error),
         };
       } else if (!active.errorEmitted && active.pendingSnapshotError) {
         active.errorEmitted = true;
@@ -1429,7 +1433,12 @@ export class CodexAppServerRuntime extends EventEmitter {
     }
     if (this.safetyDisconnectRequired) return;
     for (const active of [...this.activeTurns.values()]) {
-      this.finishTurn(active, { type: 'error', message: 'Codex App Server 连接已中断。', detail: reason });
+      this.finishTurn(active, {
+        type: 'error',
+        message: 'Codex App Server 连接已中断。',
+        detail: reason,
+        code: 'codex_app_server_disconnected',
+      });
     }
   }
 
@@ -1463,6 +1472,50 @@ export class CodexAppServerRuntime extends EventEmitter {
       }
     }
   }
+}
+
+function compactSuccessfulImageGeneration(method: string, params: unknown): unknown {
+  if (method !== 'item/completed') return params;
+  const record = recordAt(params);
+  const item = recordAt(record, 'item');
+  if (!record || !item) return params;
+  if (stringAt(item, 'type') !== 'imageGeneration' || !stringAt(item, 'savedPath')) return params;
+  if (!Object.prototype.hasOwnProperty.call(item, 'result')) return params;
+  const { result: _discardedDuplicateImage, ...boundedItem } = item;
+  return { ...record, item: boundedItem };
+}
+
+function codexErrorMetadata(error: Record<string, unknown> | null): {
+  code?: RuntimeErrorCode;
+  statusCode?: number;
+} {
+  if (!error) return {};
+  const info = error.codexErrorInfo;
+  if (typeof info === 'string') {
+    const stringCodes: Partial<Record<string, RuntimeErrorCode>> = {
+      usageLimitExceeded: 'codex_usage_limit_exceeded',
+      rateLimitExceeded: 'codex_rate_limit_exceeded',
+      unauthorized: 'codex_unauthorized',
+      serverOverloaded: 'codex_server_overloaded',
+      badRequest: 'codex_bad_request',
+    };
+    return { code: stringCodes[info] };
+  }
+  if (!info || typeof info !== 'object' || Array.isArray(info)) return {};
+  const structured = info as Record<string, unknown>;
+  const variants: Array<[string, RuntimeErrorCode]> = [
+    ['httpConnectionFailed', 'codex_http_connection_failed'],
+    ['responseStreamConnectionFailed', 'codex_response_stream_connection_failed'],
+    ['responseStreamDisconnected', 'codex_response_stream_disconnected'],
+    ['responseTooManyFailedAttempts', 'codex_response_too_many_failed_attempts'],
+  ];
+  for (const [key, code] of variants) {
+    const value = structured[key];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+    const statusCode = numberAt(value, 'httpStatusCode') ?? undefined;
+    return { code, statusCode };
+  }
+  return {};
 }
 
 function toolCallFromItem(item: Record<string, unknown>, completed: boolean): ToolCallEvent | null {

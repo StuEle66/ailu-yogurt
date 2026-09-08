@@ -68,7 +68,11 @@ import {
   GeneratedImageDropError,
 } from './ui/generatedImageDrag';
 import { getVaultBasePath } from './utils/vault';
-import { userFacingErrorMessage, userFacingErrorText } from './utils/userFacingError';
+import {
+  userFacingErrorMessage,
+  userFacingErrorText,
+  userFacingRuntimeErrorText,
+} from './utils/userFacingError';
 import { DEFAULT_WECHAT_THEME_ID, isWeChatThemeId } from './wechat/themes';
 import { XArticleUploadTaskCoordinator } from './xArticle/uploadTaskCoordinator';
 import { XArticleLocalUploader } from './xArticle/localUploader';
@@ -235,9 +239,8 @@ export default class AiluPlugin extends Plugin {
     await this.refreshAgentMemoryRuntimeHandshake(false);
     this.chatRunCoordinator = new ChatRunCoordinator({
       runTurn: (request, onEvent) => this.runtimeManager.runTurn(request, onEvent),
-      formatRuntimeError: (message, detail) => userFacingErrorText(
-        [message, detail].filter(Boolean).join('：'),
-        '当前 Agent 执行失败，请查看本地诊断日志。',
+      formatRuntimeError: (message, detail, _submission, code) => (
+        userFacingRuntimeErrorText(code, message, detail)
       ),
       onPersistenceFailure: ({ stage, failureKind }) => {
         appendLocalLog('chat_persistence_failure', { stage, failureKind });

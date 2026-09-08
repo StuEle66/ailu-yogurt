@@ -572,6 +572,40 @@ describe('CodexAppServerRuntime', () => {
     await runtime.shutdown();
   });
 
+  test('delivers a saved image artifact without charging its duplicate base64 result to chat output', async () => {
+    const client = new FakeAppServerClient();
+    const runtime = new CodexAppServerRuntime(client as unknown as CodexAppServerClient);
+    const threadId = 'large-saved-image-thread';
+    const turnId = `turn-${threadId}`;
+    const events: RuntimeTurnEvent[] = [];
+    const run = runtime.runTurn({ ...request('HOLD'), sessionId: threadId }, connection, event => events.push(event));
+    await waitForRequestCount(client, 'turn/start', 1);
+
+    client.emit('notification', 'item/completed', {
+      threadId,
+      turnId,
+      item: {
+        type: 'imageGeneration',
+        id: 'large-image',
+        status: 'completed',
+        savedPath: '/tmp/large-image.png',
+        result: 'x'.repeat(CODEX_MAX_RUNTIME_EVENT_BYTES + 1),
+      },
+    });
+    client.emit('notification', 'turn/completed', {
+      threadId,
+      turn: { id: turnId, status: 'completed' },
+    });
+    await run;
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'artifact',
+      artifact: expect.objectContaining({ sourcePath: '/tmp/large-image.png' }),
+    }));
+    expect(client.disconnectCount).toBe(0);
+    await runtime.shutdown();
+  });
+
   test('keeps a non-retryable App Server error terminal', async () => {
     const client = new FakeAppServerClient();
     const runtime = new CodexAppServerRuntime(client as unknown as CodexAppServerClient);
@@ -591,7 +625,7 @@ describe('CodexAppServerRuntime', () => {
       error: {
         message: 'Codex stream failed.',
         additionalDetails: 'retry budget exhausted',
-        codexErrorInfo: { httpStatusCode: 503 },
+        codexErrorInfo: { responseTooManyFailedAttempts: { httpStatusCode: 503 } },
       },
     });
     client.emit('notification', 'turn/completed', {
@@ -605,6 +639,7 @@ describe('CodexAppServerRuntime', () => {
       message: 'Codex stream failed.',
       detail: 'retry budget exhausted',
       statusCode: 503,
+      code: 'codex_response_too_many_failed_attempts',
     }]);
     expect(events.at(-1)).toEqual({ type: 'done', sessionId: threadId });
     await runtime.shutdown();

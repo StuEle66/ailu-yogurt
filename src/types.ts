@@ -104,6 +104,18 @@ export interface ChatImageArtifact {
 
 export type ChatArtifact = ChatImageArtifact;
 
+export type RuntimeErrorCode =
+  | 'codex_http_connection_failed'
+  | 'codex_response_stream_connection_failed'
+  | 'codex_response_stream_disconnected'
+  | 'codex_response_too_many_failed_attempts'
+  | 'codex_usage_limit_exceeded'
+  | 'codex_rate_limit_exceeded'
+  | 'codex_unauthorized'
+  | 'codex_server_overloaded'
+  | 'codex_bad_request'
+  | 'codex_app_server_disconnected';
+
 export interface ChatToolLifecycleContentSpan {
   /** UTF-16 offsets into ChatMessage.content, matching String.slice(). */
   start: number;
@@ -125,6 +137,8 @@ export interface ChatMessageMetadata extends Record<string, unknown> {
   memoryReferences?: MemorySnapshotReference[];
   /** UI-only tool progress spans; tool arguments and results never belong here. */
   ailuToolLifecycleContentV1?: ChatToolLifecycleContentMetadata;
+  /** Exact local Skill name used to restore a failed prompt without persisting Skill contents. */
+  selectedSkillName?: string;
 }
 
 export interface MemorySnapshotReference {
@@ -270,8 +284,9 @@ export type RuntimeTurnEvent =
     };
   }
   | {
-    type: 'error';
-    message: string;
+      type: 'error';
+      message: string;
+      code?: RuntimeErrorCode;
     detail?: string;
     statusCode?: number;
     retryAfterSeconds?: number;

@@ -1217,6 +1217,52 @@ body.theme-dark .ailu-message.is-user {
   display: block;
 }
 
+.ailu-runtime-progress {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 10px 0;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--interactive-accent) 22%, transparent);
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--interactive-accent) 7%, transparent);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ailu-runtime-progress.is-visible {
+  display: flex;
+}
+
+.ailu-runtime-progress-icon {
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+  color: var(--interactive-accent);
+  animation: ailu-runtime-progress-spin 1.15s linear infinite;
+}
+
+@keyframes ailu-runtime-progress-spin {
+  to { transform: rotate(360deg); }
+}
+
+button.ailu-runtime-retry-button {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border));
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+button.ailu-runtime-retry-button:hover {
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
 .ailu-file-chip {
   display: inline-flex;
   align-items: center;

@@ -98,6 +98,7 @@ describe('CodexAppServerClient', () => {
       "  if (message.method === 'fast') return send({ id: message.id, result: 'fast' });",
       "  if (message.method === 'slow') return setTimeout(() => send({ id: message.id, result: 'slow' }), 20);",
       "  if (message.method === 'malformed') { process.stdout.write('not-json\\n'); return send({ id: message.id, result: 'ok' }); }",
+      "  if (message.method === 'large-image-notification') { send({ method: 'item/completed', params: { threadId: 'large-image', turnId: 'turn-large-image', item: { type: 'imageGeneration', id: 'image', status: 'completed', savedPath: '/tmp/image.png', result: 'x'.repeat(2 * 1024 * 1024) } } }); return send({ id: message.id, result: 'ok' }); }",
       "  if (message.method === 'rpc-error') return send({ id: message.id, error: { code: -32600, message: 'no rollout found for thread id missing', data: { kind: 'no_rollout' } } });",
       `  if (message.method === 'oversized-no-newline') return process.stdout.write('x'.repeat(${CODEX_APP_SERVER_MAX_STDOUT_FRAME_BYTES + 1}));`,
       "  if (message.method === 'crash') return process.exit(7);",
@@ -198,6 +199,22 @@ describe('CodexAppServerClient', () => {
 
     expect(closes).toHaveLength(1);
     expect(closes[0]).toContain('stdout frame exceeded');
+  });
+
+  test('keeps a valid multi-megabyte image-generation notification connected', async () => {
+    const client = new CodexAppServerClient();
+    const notifications: unknown[] = [];
+    client.on('notification', (method: string, params: unknown) => notifications.push({ method, params }));
+    await client.connect({ executablePath });
+
+    await expect(client.request('large-image-notification')).resolves.toBe('ok');
+    expect(client.isReady).toBe(true);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      method: 'item/completed',
+      params: { item: { type: 'imageGeneration', savedPath: '/tmp/image.png' } },
+    });
+    await client.disconnect();
   });
 
   test('terminates the detached process group and waits for an ignoring descendant to exit', async () => {

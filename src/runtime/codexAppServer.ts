@@ -60,7 +60,12 @@ export function buildCodexAppServerArgs(): string[] {
   return ['app-server', '-c', 'service_tier="fast"', '--listen', 'stdio://'];
 }
 
-export const CODEX_APP_SERVER_MAX_STDOUT_FRAME_BYTES = 1 * 1_024 * 1_024;
+/**
+ * Image-generation completion items include both a savedPath and a duplicate
+ * base64 result. A typical 3 MB PNG therefore needs a JSONL frame above 4 MB.
+ * Keep the transport bounded while leaving room for that documented item.
+ */
+export const CODEX_APP_SERVER_MAX_STDOUT_FRAME_BYTES = 16 * 1_024 * 1_024;
 export const CODEX_APP_SERVER_TERM_GRACE_MS = 2_000;
 export const CODEX_APP_SERVER_KILL_WAIT_MS = 2_000;
 

@@ -58,7 +58,7 @@ for (const file of ['main.js', 'manifest.json', 'styles.css',
 const attestation = {
   schema_version: 1,
   product: 'ailu',
-  version: '0.3.0',
+  version: '0.4.0',
   build: {
     command: 'node scripts/build-release.mjs',
     typecheck: 'node node_modules/typescript/lib/tsc.js --noEmit',

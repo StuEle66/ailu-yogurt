@@ -65,7 +65,8 @@ export function userFacingRuntimeErrorText(
     codex_server_overloaded: 'Codex 服务当前繁忙，请稍后重试。',
     codex_bad_request: 'Codex 无法处理本次请求，请检查输入后重试。',
   };
-  if (code && known[code]) return known[code]!;
+  const knownMessage = code ? known[code] : undefined;
+  if (knownMessage) return knownMessage;
   return userFacingErrorText(
     [message, detail].filter(Boolean).join('：'),
     '当前 Agent 执行失败，请查看本地诊断日志。',

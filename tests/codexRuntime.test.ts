@@ -598,10 +598,8 @@ describe('CodexAppServerRuntime', () => {
     });
     await run;
 
-    expect(events).toContainEqual(expect.objectContaining({
-      type: 'artifact',
-      artifact: expect.objectContaining({ sourcePath: '/tmp/large-image.png' }),
-    }));
+    const artifact = events.find(event => event.type === 'artifact');
+    expect(artifact?.artifact.sourcePath).toBe('/tmp/large-image.png');
     expect(client.disconnectCount).toBe(0);
     await runtime.shutdown();
   });

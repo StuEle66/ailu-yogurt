@@ -1481,7 +1481,9 @@ function compactSuccessfulImageGeneration(method: string, params: unknown): unkn
   if (!record || !item) return params;
   if (stringAt(item, 'type') !== 'imageGeneration' || !stringAt(item, 'savedPath')) return params;
   if (!Object.prototype.hasOwnProperty.call(item, 'result')) return params;
-  const { result: _discardedDuplicateImage, ...boundedItem } = item;
+  const boundedItem = Object.fromEntries(
+    Object.entries(item).filter(([key]) => key !== 'result'),
+  );
   return { ...record, item: boundedItem };
 }
 

@@ -8,7 +8,7 @@ describe('canonical agent settings', () => {
   test('seeds the curated creation preset exactly once while preserving existing choices', () => {
     const firstLoad = normalizeAgentSettings({
       creativeSkillNames: ['local-selected-skill'],
-    } as Partial<AiluSettings>);
+    });
 
     expect(firstLoad.creativeSkillNames).toEqual([
       'local-selected-skill',
@@ -26,12 +26,12 @@ describe('canonical agent settings', () => {
       'guizang-social-card-skill',
       '优化提示词',
     ]);
-    expect((firstLoad as unknown as { creativeSkillPresetVersion?: number }).creativeSkillPresetVersion).toBe(1);
+    expect(firstLoad.creativeSkillPresetVersion).toBe(1);
 
     const afterUserRemovedOne = normalizeAgentSettings({
       creativeSkillPresetVersion: 1,
       creativeSkillNames: ['点子起稿'],
-    } as unknown as Partial<AiluSettings>);
+    });
     expect(afterUserRemovedOne.creativeSkillNames).toEqual(['点子起稿']);
   });
 

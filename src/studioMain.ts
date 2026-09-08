@@ -70,7 +70,6 @@ import {
 import { getVaultBasePath } from './utils/vault';
 import {
   userFacingErrorMessage,
-  userFacingErrorText,
   userFacingRuntimeErrorText,
 } from './utils/userFacingError';
 import { DEFAULT_WECHAT_THEME_ID, isWeChatThemeId } from './wechat/themes';

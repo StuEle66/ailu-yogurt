@@ -9,6 +9,10 @@ import {
   DEFAULT_X_PUBLISHING_SETTINGS,
   type XPublishingSettings,
 } from './settings/xPublishingSettings';
+import {
+  CREATIVE_SKILL_PRESET_VERSION,
+  CURATED_CREATIVE_SKILL_NAMES,
+} from './skill/curatedCreativeSkills';
 
 export type AgentId = 'claude' | 'codex';
 
@@ -365,6 +369,8 @@ export interface AiluSettings {
   fullAccessByAgent: FullAccessByAgent;
   /** Names of locally discovered Skills explicitly enabled by this user. */
   creativeSkillNames: string[];
+  /** One-time curated creation preset migration. */
+  creativeSkillPresetVersion: number;
   systemPrompt: string;
   planModeDefault: boolean;
   maxContextFileChars: number;
@@ -438,7 +444,8 @@ export const DEFAULT_SETTINGS: AiluSettings = {
   localModelByAgent: DEFAULT_LOCAL_MODELS,
   reasoningEffortByAgent: DEFAULT_REASONING_EFFORTS,
   fullAccessByAgent: DEFAULT_FULL_ACCESS,
-  creativeSkillNames: [],
+  creativeSkillNames: [...CURATED_CREATIVE_SKILL_NAMES],
+  creativeSkillPresetVersion: CREATIVE_SKILL_PRESET_VERSION,
   systemPrompt: '',
   planModeDefault: false,
   maxContextFileChars: 40_000,

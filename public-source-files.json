@@ -115,6 +115,7 @@
     "src/share/sourceLineMap.ts",
     "src/share/types.ts",
     "src/skill/creativeSkills.ts",
+    "src/skill/curatedCreativeSkills.ts",
     "src/skill/skillDiscovery.ts",
     "src/skill/skillParser.ts",
     "src/storage/chatStoreLease.ts",

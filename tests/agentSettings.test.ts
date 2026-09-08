@@ -5,6 +5,36 @@ import {
 import type { AiluSettings } from '../src/types';
 
 describe('canonical agent settings', () => {
+  test('seeds the curated creation preset exactly once while preserving existing choices', () => {
+    const firstLoad = normalizeAgentSettings({
+      creativeSkillNames: ['local-selected-skill'],
+    } as Partial<AiluSettings>);
+
+    expect(firstLoad.creativeSkillNames).toEqual([
+      'local-selected-skill',
+      '点子起稿',
+      '酸奶糖创作核心',
+      'daily-ai-learning-writer',
+      'moments_generator',
+      '一稿多发',
+      'chai-jie-bao-kuan',
+      '公众号长文体检',
+      '公众号合规',
+      '公众号自检',
+      'baoyu-article-illustrator',
+      'generate-wechat-summary-infographic',
+      'guizang-social-card-skill',
+      '优化提示词',
+    ]);
+    expect((firstLoad as unknown as { creativeSkillPresetVersion?: number }).creativeSkillPresetVersion).toBe(1);
+
+    const afterUserRemovedOne = normalizeAgentSettings({
+      creativeSkillPresetVersion: 1,
+      creativeSkillNames: ['点子起稿'],
+    } as unknown as Partial<AiluSettings>);
+    expect(afterUserRemovedOne.creativeSkillNames).toEqual(['点子起稿']);
+  });
+
   test('keeps only Claude and Codex while preserving their current values', () => {
     const imported = {
       defaultAgentId: 'retired-agent',
@@ -38,6 +68,7 @@ describe('canonical agent settings', () => {
         codex: true,
         retiredAgent: false,
       },
+      creativeSkillPresetVersion: 1,
       creativeSkillNames: ['tutorial-writing', ' content-helper ', 'tutorial-writing'],
     } as unknown as Partial<AiluSettings>;
 
@@ -77,6 +108,7 @@ describe('canonical agent settings', () => {
       localModelByAgent: { claude: '', codex: '', retiredAgent: '' },
       reasoningEffortByAgent: { claude: '', codex: '', retiredAgent: '' },
       fullAccessByAgent: { claude: true, codex: true, retiredAgent: false },
+      creativeSkillPresetVersion: 1,
       creativeSkillNames: ['local-selected-skill'],
       sharedEnvironmentVariables: 'API_TOKEN=must-not-remain-in-data-json',
       publishing: {
@@ -94,6 +126,7 @@ describe('canonical agent settings', () => {
     expect(canonical.unknownTopLevel).toEqual(stored.unknownTopLevel);
     expect(canonical).not.toHaveProperty('sharedEnvironmentVariables');
     expect(canonical.creativeSkillNames).toEqual(['local-selected-skill']);
+    expect(canonical.creativeSkillPresetVersion).toBe(1);
     for (const key of [
       'configSources',
       'configuredPaths',

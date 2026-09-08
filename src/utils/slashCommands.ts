@@ -4,6 +4,7 @@ import { isAbsolute, relative, sep } from 'node:path';
 import type { AgentId } from '../types';
 import { loadCreativeSkills } from '../skill/creativeSkills';
 import type { LocalSkill } from '../skill/skillDiscovery';
+import { curatedCreativeSkill } from '../skill/curatedCreativeSkills';
 
 export interface SlashCommand {
   id: string;
@@ -12,6 +13,7 @@ export interface SlashCommand {
   description: string;
   sourceLabel?: string;
   skillFilePath?: string;
+  searchText?: string;
 }
 
 export async function loadChatSkills(
@@ -19,14 +21,20 @@ export async function loadChatSkills(
   selectedNames: readonly string[],
 ): Promise<SlashCommand[]> {
   const skills = await loadCreativeSkills(agentId, selectedNames);
-  return skills.map(skill => ({
-    id: skill.filePath,
-    label: `/${skill.name}`,
-    insertText: buildSkillInvocationPrompt(skill),
-    description: [skill.sourceLabel, truncate(skill.description, 120)].filter(Boolean).join(' · '),
-    sourceLabel: skill.sourceLabel,
-    skillFilePath: skill.filePath,
-  }));
+  return skills.map(skill => {
+    const curated = curatedCreativeSkill(skill.name);
+    const displayName = curated?.displayName ?? skill.name;
+    return {
+      id: skill.filePath,
+      label: `/${displayName}`,
+      insertText: buildSkillInvocationPrompt(skill),
+      description: [displayName !== skill.name ? skill.name : '', skill.sourceLabel, truncate(skill.description, 120)]
+        .filter(Boolean).join(' · '),
+      sourceLabel: skill.sourceLabel,
+      skillFilePath: skill.filePath,
+      searchText: [skill.name, displayName, curated?.category].filter(Boolean).join(' '),
+    };
+  });
 }
 
 export function buildSkillInvocationPrompt(
@@ -58,6 +66,7 @@ export function filterSlashCommands(commands: SlashCommand[], query: string): Sl
   return commands.filter(command => (
     command.label.toLowerCase().includes(normalized)
     || command.description.toLowerCase().includes(normalized)
+    || command.searchText?.toLowerCase().includes(normalized)
   ));
 }
 

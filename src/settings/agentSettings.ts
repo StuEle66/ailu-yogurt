@@ -4,6 +4,10 @@ import {
   normalizeFullAccessByAgent,
   type AiluSettings,
 } from '../types';
+import {
+  CREATIVE_SKILL_PRESET_VERSION,
+  mergeCuratedCreativeSkills,
+} from '../skill/curatedCreativeSkills';
 
 export type CanonicalAgentSettings = Pick<
   AiluSettings,
@@ -15,6 +19,7 @@ export type CanonicalAgentSettings = Pick<
   | 'reasoningEffortByAgent'
   | 'fullAccessByAgent'
   | 'creativeSkillNames'
+  | 'creativeSkillPresetVersion'
 >;
 
 /** Rebuilds every per-agent map so retired or unknown keys are never persisted again. */
@@ -22,6 +27,10 @@ export function normalizeAgentSettings(
   value: Partial<AiluSettings> | null | undefined,
 ): CanonicalAgentSettings {
   const claudeConfigSource = value?.configSources?.claude;
+  const presetVersion = Number.isInteger(value?.creativeSkillPresetVersion)
+    ? Math.max(0, Number(value?.creativeSkillPresetVersion))
+    : 0;
+  const selectedSkillNames = normalizeSelectedSkillNames(value?.creativeSkillNames);
   return {
     defaultAgentId: normalizeSelectableAgentId(value?.defaultAgentId),
     configSources: {
@@ -63,7 +72,10 @@ export function normalizeAgentSettings(
         : DEFAULT_SETTINGS.reasoningEffortByAgent.codex,
     },
     fullAccessByAgent: normalizeFullAccessByAgent(value?.fullAccessByAgent),
-    creativeSkillNames: normalizeSelectedSkillNames(value?.creativeSkillNames),
+    creativeSkillNames: presetVersion < CREATIVE_SKILL_PRESET_VERSION
+      ? mergeCuratedCreativeSkills(selectedSkillNames)
+      : selectedSkillNames,
+    creativeSkillPresetVersion: CREATIVE_SKILL_PRESET_VERSION,
   };
 }
 
@@ -82,6 +94,7 @@ export function canonicalizeStoredAgentSettings(
     reasoningEffortByAgent: normalized.reasoningEffortByAgent,
     fullAccessByAgent: normalized.fullAccessByAgent,
     creativeSkillNames: normalized.creativeSkillNames,
+    creativeSkillPresetVersion: normalized.creativeSkillPresetVersion,
   };
   delete canonical.sharedEnvironmentVariables;
   return canonical;

@@ -29,4 +29,18 @@ describe('creative Skill catalog', () => {
       'content-helper',
     ]);
   });
+
+  test('uses the selected workflow order instead of filesystem discovery order', () => {
+    const skills = [
+      localSkill('公众号自检'),
+      localSkill('点子起稿'),
+      localSkill('一稿多发'),
+    ];
+
+    expect(filterCreativeSkills(skills, ['点子起稿', '一稿多发', '公众号自检']).map(skill => skill.name)).toEqual([
+      '点子起稿',
+      '一稿多发',
+      '公众号自检',
+    ]);
+  });
 });

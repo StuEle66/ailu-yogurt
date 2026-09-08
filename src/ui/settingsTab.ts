@@ -27,6 +27,11 @@ import {
 } from '../runtime/ccSwitch';
 import { getClaudeDetectedLocalModel } from '../runtime/localModels';
 import { filterCreativeSkills } from '../skill/creativeSkills';
+import {
+  CREATIVE_SKILL_PRESET_VERSION,
+  curatedCreativeSkill,
+  mergeCuratedCreativeSkills,
+} from '../skill/curatedCreativeSkills';
 import { invalidateSkillCache, loadLocalSkills } from '../skill/skillDiscovery';
 import type { RuntimeManager } from '../runtime/runtimeManager';
 import { inferAnthropicAuthMode, requiresProviderApiKey } from '../utils/providerAuth';
@@ -1809,7 +1814,12 @@ export class AiluSettingTab extends PluginSettingTab {
             new Notice(userFacingErrorMessage(error, '保存 Skill 选择失败。'));
           });
         };
-        row.createEl('td', { text: skill.name, cls: 'ailu-skill-name' });
+        const curated = curatedCreativeSkill(skill.name);
+        const nameCell = row.createEl('td', { cls: 'ailu-skill-name' });
+        nameCell.createDiv({ text: curated?.displayName ?? skill.name });
+        if (curated && curated.displayName !== skill.name) {
+          nameCell.createEl('small', { text: skill.name });
+        }
         row.createEl('td', { text: skill.sourceLabel, cls: 'ailu-skill-source' });
         const description = row.createEl('td', { cls: 'ailu-skill-description' });
         description.createSpan({ text: formatSkillDescription(skill.description) });
@@ -1817,6 +1827,27 @@ export class AiluSettingTab extends PluginSettingTab {
     }
 
     const footer = content.createDiv({ cls: 'ailu-skills-footer' });
+    const restore = footer.createEl('button', {
+      cls: 'ailu-skill-restore-button',
+      text: '恢复精选 13 个',
+      attr: { type: 'button' },
+    });
+    restore.onclick = () => {
+      const currentSettings = this.deps.getSettings();
+      const previousNames = [...currentSettings.creativeSkillNames];
+      const previousVersion = currentSettings.creativeSkillPresetVersion;
+      currentSettings.creativeSkillNames = mergeCuratedCreativeSkills(previousNames);
+      currentSettings.creativeSkillPresetVersion = CREATIVE_SKILL_PRESET_VERSION;
+      restore.disabled = true;
+      void this.deps.saveSettings().then(() => {
+        void this.loadAndRenderSkills(content, status, agentId);
+      }).catch(error => {
+        currentSettings.creativeSkillNames = previousNames;
+        currentSettings.creativeSkillPresetVersion = previousVersion;
+        restore.disabled = false;
+        new Notice(userFacingErrorMessage(error, '恢复精选 Skill 失败。'));
+      });
+    };
     const refresh = footer.createEl('button', {
       cls: 'ailu-skill-refresh-button',
       text: '刷新',

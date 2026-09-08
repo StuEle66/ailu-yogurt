@@ -27,6 +27,19 @@ describe('filterSlashCommands', () => {
     expect(filterSlashCommands(commands, 'extract')).toHaveLength(1);
   });
 
+  test('filters by a curated Chinese display name as well as the underlying Skill name', () => {
+    const commands = [{
+      id: 'daily-ai-learning-writer',
+      label: '/AI 日更',
+      insertText: 'invoke',
+      description: '共享 · Daily writing',
+      searchText: 'daily-ai-learning-writer AI 日更',
+    }];
+
+    expect(filterSlashCommands(commands, '日更')).toHaveLength(1);
+    expect(filterSlashCommands(commands, 'daily-ai')).toHaveLength(1);
+  });
+
   test('empty query returns all', () => {
     const commands = [
       { id: 'a', label: '/alpha', insertText: 'alpha', description: 'Alpha' },

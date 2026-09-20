@@ -3,7 +3,7 @@
 ## 来源与产品边界
 
 - 本仓库基于上游 `https://github.com/mcncarl/ailu`，个人仓库为 `https://github.com/StuEle66/ailu-yogurt`。上游远程名为 `upstream`，个人远程名为 `origin`；固定基线为 `8a232fe082163c5898038cca7bcf26cb1956b9a2`，功能开发使用独立分支。
-- 插件 ID 和包名保持 `ailu`，显示名保持 `Ailu`，Vault 与用户目录的数据命名空间保持 `.ailu`。当前定制版本为 `0.5.1`；版本变更须同步 manifest、package、lockfile、versions、构建证明和发行校验器。
+- 插件 ID 和包名保持 `ailu`，显示名保持 `Ailu`，Vault 与用户目录的数据命名空间保持 `.ailu`。当前定制版本为 `0.5.2`；版本变更须同步 manifest、package、lockfile、versions、构建证明和发行校验器。
 - 保留原作者信息、AGPL-3.0-or-later、第三方来源和许可证。定制构建不冒充上游官方发行版。
 - 当前定制范围包括公众号正文图片复制、独立封面选择与裁剪，以及从固定 MDFlow 基线迁入的小红书本地图卡工作流。扩展范围前先更新规格与验收标准。
 

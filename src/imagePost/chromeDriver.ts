@@ -230,6 +230,8 @@ export function classifyImagePostComposerSnapshot(snapshot: {
   hasTitle: boolean;
   hasBody: boolean;
   hasContent: boolean;
+  title?: string;
+  body?: string;
 }): ImagePostComposerState {
   if (/login|passport/u.test(snapshot.url) || /扫码登录|登录公众平台|手机验证码/u.test(snapshot.text)) {
     return 'login-required';
@@ -240,7 +242,12 @@ export function classifyImagePostComposerSnapshot(snapshot: {
     && !snapshot.hasBody
     && /上传图文|上传图片/u.test(snapshot.text)) return 'empty';
   if (!snapshot.fileInputCount || (!snapshot.hasTitle && !snapshot.hasBody)) return 'page-changed';
-  return snapshot.hasContent || snapshot.uploadedImageCount > 0 ? 'content-present' : 'empty';
+  const wechatPlaceholderOnly = /mp\.weixin\.qq\.com/u.test(snapshot.url)
+    && !(snapshot.title || '').trim()
+    && (snapshot.body || '').trim() === '填写描述信息，让大家了解更多内容';
+  return (snapshot.hasContent && !wechatPlaceholderOnly) || snapshot.uploadedImageCount > 0
+    ? 'content-present'
+    : 'empty';
 }
 
 export async function waitForImagePostComposerState(

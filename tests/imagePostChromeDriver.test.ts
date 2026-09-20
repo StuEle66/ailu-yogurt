@@ -137,6 +137,20 @@ describe('image post Chrome driver', () => {
     expect(source).toContain("'Input.dispatchMouseEvent'");
   });
 
+  it('treats the WeChat description placeholder as an empty composer', () => {
+    expect(classifyImagePostComposerSnapshot({
+      url: 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&type=77',
+      text: '选择或拖拽图片\n填写描述信息，让大家了解更多内容',
+      fileInputCount: 2,
+      uploadedImageCount: 0,
+      hasTitle: true,
+      hasBody: true,
+      hasContent: true,
+      title: '',
+      body: '填写描述信息，让大家了解更多内容',
+    })).toBe('empty');
+  });
+
   it('targets the WeChat image-post uploader and description editor instead of article controls', () => {
     const profile = imagePostBrowserProfile('wechat-image');
     expect(profile.fileInputSelector).toBe('.js_upload_btn_container input[type="file"]');

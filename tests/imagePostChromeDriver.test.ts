@@ -28,6 +28,15 @@ describe('image post Chrome driver', () => {
     expect(source).not.toContain('正式发布');
   });
 
+  it('allows only the Obsidian app origin to control the dedicated Chrome session', () => {
+    const source = fs.readFileSync(
+      fileURLToPath(new URL('../src/imagePost/chromeDriver.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toContain("'--remote-allow-origins=app://obsidian.md'");
+    expect(source).not.toContain("'--remote-allow-origins=*'");
+  });
+
   it('enables the dedicated Chrome driver for both image-post editors', () => {
     const main = fs.readFileSync(
       fileURLToPath(new URL('../src/studioMain.ts', import.meta.url)),

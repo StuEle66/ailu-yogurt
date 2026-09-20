@@ -228,6 +228,7 @@ export class DedicatedChromeController {
     }
     const child = spawn(this.executable, [
       '--remote-debugging-port=0',
+      '--remote-allow-origins=app://obsidian.md',
       `--user-data-dir=${this.profileDirectory}`,
       '--no-first-run',
       '--no-default-browser-check',

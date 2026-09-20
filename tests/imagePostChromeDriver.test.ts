@@ -11,6 +11,7 @@ import {
   classifyImagePostComposerSnapshot,
   DedicatedChromeController,
   imagePostBrowserProfile,
+  selectExistingImagePostTarget,
   waitForImagePostComposerState,
 } from '../src/imagePost/chromeDriver';
 
@@ -77,6 +78,28 @@ describe('image post Chrome driver', () => {
     )).resolves.toBe('empty');
     expect(reads).toBe(3);
     expect(waits).toBe(2);
+  });
+
+  it('reuses the existing authenticated platform tab instead of opening a duplicate', () => {
+    expect(selectExistingImagePostTarget([
+      {
+        type: 'page',
+        url: 'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&token=test',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/authenticated',
+      },
+      {
+        type: 'page',
+        url: 'https://mp.weixin.qq.com/',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/login',
+      },
+      {
+        type: 'page',
+        url: 'https://example.com/',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/unrelated',
+      },
+    ], imagePostBrowserProfile('wechat-image').editorUrl)).toEqual({
+      webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/authenticated',
+    });
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

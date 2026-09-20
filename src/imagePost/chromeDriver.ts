@@ -239,6 +239,14 @@ export class DedicatedChromeController {
 
   async openPage(url: string, signal: AbortSignal): Promise<CdpSession> {
     await this.ensureEndpoint(signal);
+    const targetsResponse = await requestLocalChrome(`${this.endpoint}/json/list`, 'GET', signal);
+    if (targetsResponse.status >= 200 && targetsResponse.status < 300) {
+      const existing = selectExistingImagePostTarget(
+        JSON.parse(targetsResponse.body) as ChromeTarget[],
+        url,
+      );
+      if (existing) return CdpSession.connect(existing.webSocketDebuggerUrl, signal);
+    }
     const response = await requestLocalChrome(`${this.endpoint}/json/new?${encodeURIComponent(url)}`, 'PUT', signal);
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`专用 Chrome 无法创建编辑页（${response.status}）。`);
@@ -278,6 +286,35 @@ export class DedicatedChromeController {
     }
     throw new Error('专用 Chrome 启动超时，请确认已安装 Google Chrome。');
   }
+}
+
+export interface ChromeTarget {
+  type?: string;
+  url?: string;
+  webSocketDebuggerUrl?: string;
+}
+
+export function selectExistingImagePostTarget(
+  targets: readonly ChromeTarget[],
+  requestedUrl: string,
+): { webSocketDebuggerUrl: string } | null {
+  const requested = new URL(requestedUrl);
+  const candidates = targets.flatMap((target, index) => {
+    if (target.type !== 'page' || !target.url || !target.webSocketDebuggerUrl) return [];
+    try {
+      const current = new URL(target.url);
+      const websocket = new URL(target.webSocketDebuggerUrl);
+      if (current.origin !== requested.origin
+        || websocket.protocol !== 'ws:'
+        || websocket.hostname !== '127.0.0.1') return [];
+      const authenticatedWechat = requested.hostname === 'mp.weixin.qq.com'
+        && current.pathname.startsWith('/cgi-bin/');
+      return [{ target, index, score: authenticatedWechat ? 100 : 0 }];
+    } catch { return []; }
+  });
+  candidates.sort((left, right) => right.score - left.score || left.index - right.index);
+  const selected = candidates[0]?.target.webSocketDebuggerUrl;
+  return selected ? { webSocketDebuggerUrl: selected } : null;
 }
 
 class CdpSession {

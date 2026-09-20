@@ -151,7 +151,12 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     await session.send('Input.dispatchMouseEvent', {
       type: 'mouseReleased', button: 'left', clickCount: 1, ...point,
     });
-    await delay(1_000, signal);
+    const composer = await this.chrome.waitForWechatImageComposer(signal);
+    if (composer) {
+      this.session = composer;
+      await composer.send('Page.enable');
+      await delay(500, signal);
+    }
   }
 
   private async fillField(selectors: readonly string[], value: string, signal: AbortSignal): Promise<void> {
@@ -278,6 +283,19 @@ export class DedicatedChromeController {
     return CdpSession.connect(target.webSocketDebuggerUrl, signal);
   }
 
+  async waitForWechatImageComposer(signal: AbortSignal): Promise<CdpSession | null> {
+    await this.ensureEndpoint(signal);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await requestLocalChrome(`${this.endpoint}/json/list`, 'GET', signal);
+      if (response.status >= 200 && response.status < 300) {
+        const target = selectWechatImageComposerTarget(JSON.parse(response.body) as ChromeTarget[]);
+        if (target) return CdpSession.connect(target.webSocketDebuggerUrl, signal);
+      }
+      await delay(500, signal);
+    }
+    return null;
+  }
+
   private async ensureEndpoint(signal: AbortSignal): Promise<void> {
     if (this.endpoint && await endpointAvailable(this.endpoint)) return;
     await mkdir(this.profileDirectory, { recursive: true });
@@ -331,12 +349,37 @@ export function selectExistingImagePostTarget(
         || websocket.hostname !== '127.0.0.1') return [];
       const authenticatedWechat = requested.hostname === 'mp.weixin.qq.com'
         && current.pathname.startsWith('/cgi-bin/');
-      return [{ target, index, score: authenticatedWechat ? 100 : 0 }];
+      const wechatImageComposer = requested.hostname === 'mp.weixin.qq.com'
+        && isWechatImageComposerUrl(current);
+      return [{ target, index, score: wechatImageComposer ? 200 : authenticatedWechat ? 100 : 0 }];
     } catch { return []; }
   });
   candidates.sort((left, right) => right.score - left.score || left.index - right.index);
   const selected = candidates[0]?.target.webSocketDebuggerUrl;
   return selected ? { webSocketDebuggerUrl: selected } : null;
+}
+
+export function selectWechatImageComposerTarget(
+  targets: readonly ChromeTarget[],
+): { webSocketDebuggerUrl: string } | null {
+  const selected = targets.find(target => {
+    if (target.type !== 'page' || !target.url || !target.webSocketDebuggerUrl) return false;
+    try {
+      const current = new URL(target.url);
+      const websocket = new URL(target.webSocketDebuggerUrl);
+      return isWechatImageComposerUrl(current)
+        && websocket.protocol === 'ws:'
+        && websocket.hostname === '127.0.0.1';
+    } catch { return false; }
+  })?.webSocketDebuggerUrl;
+  return selected ? { webSocketDebuggerUrl: selected } : null;
+}
+
+function isWechatImageComposerUrl(url: URL): boolean {
+  return url.hostname === 'mp.weixin.qq.com'
+    && url.pathname === '/cgi-bin/appmsg'
+    && url.searchParams.get('t') === 'media/appmsg_edit_v2'
+    && url.searchParams.get('type') === '77';
 }
 
 class CdpSession {

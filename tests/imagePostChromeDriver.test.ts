@@ -11,6 +11,7 @@ import {
   classifyImagePostComposerSnapshot,
   DedicatedChromeController,
   imagePostBrowserProfile,
+  selectWechatImageComposerTarget,
   selectExistingImagePostTarget,
   waitForImagePostComposerState,
   WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR,
@@ -101,6 +102,28 @@ describe('image post Chrome driver', () => {
       },
     ], imagePostBrowserProfile('wechat-image').editorUrl)).toEqual({
       webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/authenticated',
+    });
+  });
+
+  it('follows the WeChat image composer opened from the home page', () => {
+    expect(selectWechatImageComposerTarget([
+      {
+        type: 'page',
+        url: 'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&token=test',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/home',
+      },
+      {
+        type: 'page',
+        url: 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&action=edit&isNew=1&type=77&createType=8&token=test',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/image-composer',
+      },
+      {
+        type: 'page',
+        url: 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&type=10&token=test',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/article-composer',
+      },
+    ])).toEqual({
+      webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/image-composer',
     });
   });
 

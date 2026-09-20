@@ -10,6 +10,7 @@ import {
   type ImagePostDestination,
   type ImagePostMaterial,
   type ImagePostSource,
+  type ImportImagePostPhotoBytesInput,
   type ImportImagePostPhotoInput,
   type ImportRenderedImagePostCardInput,
   type PreparedImagePost,
@@ -34,6 +35,9 @@ const nodeFileSystem = {
     await writeFile(filePath, bytes, { mode: 0o600 });
   },
 };
+
+const STANDALONE_PHOTO_DRAFT_ID = 'standalone';
+const STANDALONE_PHOTO_BACKUP_ID = 'standalone_before_legacy_restore';
 
 export class ImagePostWorkspaceController {
   private readonly drafts: ImagePostDraftStore;
@@ -62,17 +66,49 @@ export class ImagePostWorkspaceController {
     source: ImagePostSource | null,
     workflow: ImagePostDraft['workflow'] = 'photos',
   ): Promise<ImagePostDraft> {
-    const baseId = imagePostDraftId(source?.articlePath ?? null);
-    const id = workflow === 'cards' ? `cards_${baseId}` : baseId;
-    return await this.drafts.load(id) ?? createImagePostDraft({ id, source, workflow });
+    const id = imagePostDraftId(source?.articlePath ?? null, workflow);
+    const draftSource = workflow === 'photos' ? null : source;
+    return await this.drafts.load(id) ?? createImagePostDraft({ id, source: draftSource, workflow });
   }
 
   saveDraft(draft: ImagePostDraft): Promise<void> {
     return this.drafts.save(draft);
   }
 
+  loadLegacyPhotoDraft(source: ImagePostSource): Promise<ImagePostDraft | null> {
+    return this.drafts.load(legacyImagePostPhotoDraftId(source.articlePath));
+  }
+
+  async restoreLegacyPhotoDraft(source: ImagePostSource): Promise<ImagePostDraft> {
+    const legacy = await this.loadLegacyPhotoDraft(source);
+    if (!legacy) throw new Error('当前文章没有可恢复的旧图文草稿。');
+    const current = await this.drafts.load(STANDALONE_PHOTO_DRAFT_ID);
+    if (current) {
+      await this.drafts.save(clonePhotoDraft(current, STANDALONE_PHOTO_BACKUP_ID));
+    }
+    const restored = clonePhotoDraft(legacy, STANDALONE_PHOTO_DRAFT_ID);
+    await this.drafts.save(restored);
+    return restored;
+  }
+
+  loadStandalonePhotoDraftBackup(): Promise<ImagePostDraft | null> {
+    return this.drafts.load(STANDALONE_PHOTO_BACKUP_ID);
+  }
+
+  async restoreStandalonePhotoDraftBackup(): Promise<ImagePostDraft> {
+    const backup = await this.loadStandalonePhotoDraftBackup();
+    if (!backup) throw new Error('没有可恢复的独立照片草稿备份。');
+    const restored = clonePhotoDraft(backup, STANDALONE_PHOTO_DRAFT_ID);
+    await this.drafts.save(restored);
+    return restored;
+  }
+
   importPhoto(input: ImportImagePostPhotoInput) {
     return this.assets.importPhoto(input);
+  }
+
+  importPhotoBytes(input: ImportImagePostPhotoBytesInput) {
+    return this.assets.importPhotoBytes(input);
   }
 
   importRenderedCard(input: ImportRenderedImagePostCardInput) {
@@ -94,7 +130,35 @@ export class ImagePostWorkspaceController {
   }
 }
 
-export function imagePostDraftId(articlePath: string | null): string {
-  if (!articlePath) return 'standalone';
+export function imagePostDraftId(
+  articlePath: string | null,
+  workflow: ImagePostDraft['workflow'] = 'photos',
+): string {
+  if (workflow === 'photos') return 'standalone';
+  if (!articlePath) return 'cards_standalone';
+  return `cards_${legacyImagePostPhotoDraftId(articlePath)}`;
+}
+
+export function legacyImagePostPhotoDraftId(articlePath: string): string {
   return `article_${createHash('sha256').update(articlePath, 'utf8').digest('hex').slice(0, 24)}`;
+}
+
+function clonePhotoDraft(draft: ImagePostDraft, id: string): ImagePostDraft {
+  if (draft.workflow !== 'photos') throw new Error('只能恢复照片图文草稿。');
+  const destinationCopy: ImagePostDraft['destinationCopy'] = {};
+  for (const destination of ['rednote', 'wechat-image'] as const) {
+    const copy = draft.destinationCopy[destination];
+    if (copy) destinationCopy[destination] = { ...copy, topics: [...copy.topics] };
+  }
+  return {
+    ...draft,
+    id,
+    source: null,
+    revision: draft.revision + 1,
+    materials: draft.materials.map(material => ({ ...material })),
+    activeMaterialId: draft.activeMaterialId,
+    sharedCopy: { ...draft.sharedCopy, topics: [...draft.sharedCopy.topics] },
+    destinationCopy,
+    selectedCardPages: [],
+  };
 }

@@ -201,6 +201,58 @@ describe('managed image post assets', () => {
     expect(first.contentHash).toMatch(/^[a-f0-9]{64}$/u);
   });
 
+  test('imports readable photo bytes without requiring a local file path', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const store = new ManagedImagePostAssetStore({
+      rootDirectory: '/vault/.ailu/image-posts/assets',
+      fileSystem,
+      createId: () => 'photo-from-file',
+    });
+    const bytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01,
+    ]);
+
+    const material = await store.importPhotoBytes({
+      bytes,
+      originalName: '照片 App 拖入.png',
+      width: 1170,
+      height: 1560,
+    });
+
+    expect(material).toMatchObject({
+      id: 'photo-from-file',
+      kind: 'photo',
+      originalName: '照片 App 拖入.png',
+      width: 1170,
+      height: 1560,
+      mimeType: 'image/png',
+    });
+    expect(fileSystem.files.get(material.managedPath)).toEqual(bytes);
+  });
+
+  test('rejects unsupported or damaged in-memory photos without writing a managed copy', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const store = new ManagedImagePostAssetStore({
+      rootDirectory: '/vault/.ailu/image-posts/assets',
+      fileSystem,
+      createId: () => 'unused',
+    });
+
+    await expect(store.importPhotoBytes({
+      bytes: Uint8Array.from([0, 1, 2]),
+      originalName: '照片.HEIC',
+      width: 1200,
+      height: 1600,
+    })).rejects.toThrow('HEIC 请先导出为 JPEG');
+    await expect(store.importPhotoBytes({
+      bytes: Uint8Array.from([0, 1, 2]),
+      originalName: '损坏.png',
+      width: 1200,
+      height: 1600,
+    })).rejects.toThrow('图片内容与文件格式不一致');
+    expect(fileSystem.files.size).toBe(0);
+  });
+
   test('materializes a rendered PNG card into the same managed asset boundary', async () => {
     const fileSystem = new MemoryFileSystem();
     const store = new ManagedImagePostAssetStore({

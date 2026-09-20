@@ -8,13 +8,23 @@ import {
   removeImagePostMaterial,
   resetDestinationImagePostCopy,
   resolveImagePostCopy,
+  setImagePostActiveMaterial,
   setDestinationImagePostCopy,
   setImagePostLeadMaterial,
   updateSharedImagePostCopy,
   type ImagePostMaterial,
 } from '../src/imagePost';
+import { imagePostDraftId } from '../src/imagePost/controller';
 
 describe('image post draft materials', () => {
+  test('uses one article-independent photo draft while keeping card drafts article-bound', () => {
+    expect(imagePostDraftId('Ideas/First.md', 'photos')).toBe('standalone');
+    expect(imagePostDraftId('Ideas/Second.md', 'photos')).toBe('standalone');
+    expect(imagePostDraftId('Ideas/First.md', 'cards')).toMatch(/^cards_article_[a-f0-9]{24}$/u);
+    expect(imagePostDraftId('Ideas/First.md', 'cards'))
+      .not.toBe(imagePostDraftId('Ideas/Second.md', 'cards'));
+  });
+
   test('creates revisioned photo and card workspaces with isolated material kinds', () => {
     let photos = createImagePostDraft({ id: 'photos', source: null, workflow: 'photos' });
     expect(photos).toMatchObject({ workflow: 'photos', revision: 0 });
@@ -67,6 +77,52 @@ describe('image post draft materials', () => {
     const withoutPhoto = removeImagePostMaterial(draft, 'photo-2');
     expect(withoutPhoto.materials.map(material => material.id)).toEqual(['photo-1']);
     expect(draft.materials.map(material => material.id)).toEqual(['photo-2', 'photo-1']);
+  });
+
+  test('keeps the selected photo stable while editing and reordering', () => {
+    let draft = createImagePostDraft({ id: 'photo-preview', source: null, workflow: 'photos' });
+    for (const [index, id] of ['one', 'two', 'three'].entries()) {
+      draft = addImagePostMaterial(draft, {
+        id,
+        kind: 'photo',
+        fileName: `${id}.jpg`,
+        originalName: `${id}.jpg`,
+        contentHash: String(index + 1).repeat(64),
+        width: 1200,
+        height: 1600,
+        managedPath: `/managed/${id}.jpg`,
+        mimeType: 'image/jpeg',
+      });
+    }
+
+    draft = setImagePostActiveMaterial(draft, 'two');
+    draft = updateSharedImagePostCopy(draft, { title: '刚输入的标题', body: '', topics: [] });
+    draft = moveImagePostMaterial(draft, 'two', 0);
+
+    expect(draft.activeMaterialId).toBe('two');
+    expect(draft.materials.map(material => material.id)).toEqual(['two', 'one', 'three']);
+  });
+
+  test('moves the preview to an adjacent photo when the selected photo is removed', () => {
+    let draft = createImagePostDraft({ id: 'photo-remove', source: null, workflow: 'photos' });
+    for (const [index, id] of ['one', 'two', 'three'].entries()) {
+      draft = addImagePostMaterial(draft, {
+        id,
+        kind: 'photo',
+        fileName: `${id}.png`,
+        originalName: `${id}.png`,
+        contentHash: String(index + 1).repeat(64),
+        width: 1200,
+        height: 1600,
+        managedPath: `/managed/${id}.png`,
+        mimeType: 'image/png',
+      });
+    }
+    draft = setImagePostActiveMaterial(draft, 'two');
+
+    draft = removeImagePostMaterial(draft, 'two');
+    expect(draft.activeMaterialId).toBe('three');
+    expect(() => setImagePostActiveMaterial(draft, 'missing')).toThrow('找不到图文素材');
   });
 
   test('shares copy by default and preserves an explicit platform override until reset', () => {

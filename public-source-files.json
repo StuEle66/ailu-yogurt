@@ -271,6 +271,7 @@
     "tests/ids.test.ts",
     "tests/imagePostAdapters.test.ts",
     "tests/imagePostChromeDriver.test.ts",
+    "tests/imagePostController.test.ts",
     "tests/imagePostDeliveryState.test.ts",
     "tests/imagePostDraft.test.ts",
     "tests/imagePostDraftStore.test.ts",

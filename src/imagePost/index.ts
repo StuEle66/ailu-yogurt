@@ -28,6 +28,7 @@ export interface ImagePostPhotoMaterial extends ImagePostMaterialBase {
 export {
   ManagedImagePostAssetStore,
   type ImportImagePostPhotoInput,
+  type ImportImagePostPhotoBytesInput,
   type ImportRenderedImagePostCardInput,
   type ManagedAssetFileSystem,
 } from './managedAssetStore';
@@ -60,6 +61,7 @@ export interface ImagePostDraft {
   source: ImagePostSource | null;
   materials: ImagePostMaterial[];
   leadMaterialId: string | null;
+  activeMaterialId: string | null;
   sharedCopy: ImagePostCopy;
   destinationCopy: Partial<Record<ImagePostDestination, ImagePostCopy>>;
   selectedCardPages: number[];
@@ -114,6 +116,7 @@ export function createImagePostDraft(input: {
     revision: 0,
     materials: [],
     leadMaterialId: null,
+    activeMaterialId: null,
     sharedCopy: { title: '', body: '', topics: [] },
     destinationCopy: {},
     selectedCardPages: [],
@@ -180,6 +183,9 @@ export function replaceImagePostMaterials(
   return nextRevision(draft, {
     materials: materials.map(material => ({ ...material })),
     leadMaterialId: materials[0]?.id ?? null,
+    activeMaterialId: materials.some(material => material.id === draft.activeMaterialId)
+      ? draft.activeMaterialId
+      : materials[0]?.id ?? null,
   });
 }
 
@@ -344,6 +350,7 @@ export function addImagePostMaterial(
   return nextRevision(draft, {
     materials: [...draft.materials, { ...material }],
     leadMaterialId: draft.leadMaterialId ?? material.id,
+    activeMaterialId: draft.activeMaterialId ?? material.id,
   });
 }
 
@@ -365,6 +372,7 @@ export function removeImagePostMaterial(
   draft: ImagePostDraft,
   materialId: string,
 ): ImagePostDraft {
+  const removedIndex = draft.materials.findIndex(material => material.id === materialId);
   const materials = draft.materials.filter(material => material.id !== materialId);
   if (materials.length === draft.materials.length) return draft;
   return nextRevision(draft, {
@@ -372,7 +380,21 @@ export function removeImagePostMaterial(
     leadMaterialId: draft.leadMaterialId === materialId
       ? materials[0]?.id ?? null
       : draft.leadMaterialId,
+    activeMaterialId: draft.activeMaterialId === materialId
+      ? materials[Math.min(removedIndex, materials.length - 1)]?.id ?? null
+      : draft.activeMaterialId,
   });
+}
+
+export function setImagePostActiveMaterial(
+  draft: ImagePostDraft,
+  materialId: string,
+): ImagePostDraft {
+  if (!draft.materials.some(material => material.id === materialId)) {
+    throw new Error(`找不到图文素材：${materialId}`);
+  }
+  if (draft.activeMaterialId === materialId) return draft;
+  return nextRevision(draft, { activeMaterialId: materialId });
 }
 
 export function setImagePostLeadMaterial(
@@ -403,6 +425,7 @@ export function replaceImagePostMaterial(
   return nextRevision(draft, {
     materials,
     leadMaterialId: draft.leadMaterialId === materialId ? material.id : draft.leadMaterialId,
+    activeMaterialId: draft.activeMaterialId === materialId ? material.id : draft.activeMaterialId,
   });
 }
 

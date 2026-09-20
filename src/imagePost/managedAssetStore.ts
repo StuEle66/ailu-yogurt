@@ -20,6 +20,13 @@ export interface ImportImagePostPhotoInput {
   height: number;
 }
 
+export interface ImportImagePostPhotoBytesInput {
+  bytes: Uint8Array;
+  originalName: string;
+  width: number;
+  height: number;
+}
+
 export interface ImportRenderedImagePostCardInput {
   bytes: Uint8Array;
   fileName: string;
@@ -44,18 +51,26 @@ export class ManagedImagePostAssetStore {
   }
 
   async importPhoto(input: ImportImagePostPhotoInput): Promise<ImagePostPhotoMaterial> {
-    const format = photoFormat(input.originalName);
     const bytes = await this.fileSystem.readFile(input.sourcePath);
-    assertPhotoSignature(bytes, format.mimeType);
+    return await this.importPhotoBytes({ ...input, bytes });
+  }
+
+  async importPhotoBytes(input: ImportImagePostPhotoBytesInput): Promise<ImagePostPhotoMaterial> {
+    const format = photoFormat(input.originalName);
+    assertPhotoSignature(input.bytes, format.mimeType);
+    if (!Number.isFinite(input.width) || input.width <= 0
+      || !Number.isFinite(input.height) || input.height <= 0) {
+      throw new Error('图片尺寸无效，未导入图文素材。');
+    }
     const id = this.createId();
     if (!/^[a-zA-Z0-9_-]+$/u.test(id)) {
       throw new Error('受管图片 ID 格式无效。');
     }
-    const contentHash = createHash('sha256').update(bytes).digest('hex');
+    const contentHash = createHash('sha256').update(input.bytes).digest('hex');
     const fileName = `${id}-${contentHash.slice(0, 12)}${format.extension}`;
     const managedPath = path.join(this.rootDirectory, fileName);
     await this.fileSystem.mkdir(this.rootDirectory);
-    await this.fileSystem.writeFile(managedPath, bytes);
+    await this.fileSystem.writeFile(managedPath, input.bytes);
     return {
       id,
       kind: 'photo',

@@ -82,6 +82,9 @@ function normalizeDraft(value: unknown): ImagePostDraft {
     || (leadMaterialId !== null && !ids.has(leadMaterialId))) {
     throw new Error('首图引用无效');
   }
+  const activeMaterialId = materials.some(material => material.id === value.activeMaterialId)
+    ? value.activeMaterialId
+    : leadMaterialId;
   const sharedCopy = normalizeCopy(value.sharedCopy);
   if (!isRecord(value.destinationCopy)) throw new Error('平台文案无效');
   const destinationCopy: ImagePostDraft['destinationCopy'] = {};
@@ -103,6 +106,7 @@ function normalizeDraft(value: unknown): ImagePostDraft {
     source,
     materials,
     leadMaterialId,
+    activeMaterialId: typeof activeMaterialId === 'string' ? activeMaterialId : null,
     sharedCopy,
     destinationCopy,
     selectedCardPages,

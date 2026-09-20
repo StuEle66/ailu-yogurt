@@ -43,7 +43,6 @@ import {
   createWechatImagePostAdapter,
   createXiaohongshuImagePostAdapter,
   ImagePostHandoffCoordinator,
-  UnavailableImagePostBrowserDriver,
 } from './imagePost';
 import { DedicatedChromeController, DedicatedChromeImagePostDriver } from './imagePost/chromeDriver';
 import { ImagePostWorkspaceController } from './imagePost/controller';
@@ -153,7 +152,7 @@ export default class AiluPlugin extends Plugin {
       path.join(ailuHome(), 'image-post'),
       new ImagePostHandoffCoordinator([
         createXiaohongshuImagePostAdapter(new DedicatedChromeImagePostDriver('rednote', imagePostChrome)),
-        createWechatImagePostAdapter(new UnavailableImagePostBrowserDriver('微信贴图后台填充尚未启用。')),
+        createWechatImagePostAdapter(new DedicatedChromeImagePostDriver('wechat-image', imagePostChrome)),
       ]),
     );
     this.homeProcessWriteLock = supportsPhysicalWriter

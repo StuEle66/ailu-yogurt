@@ -9193,6 +9193,34 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   gap: 10px;
 }
 
+.ailu-image-post-card-selection {
+  display: grid;
+  gap: 8px;
+}
+
+.ailu-image-post-card-selection-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+}
+
+.ailu-image-post-card-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ailu-image-post-card-pages > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+  background: var(--background-secondary);
+}
+
 .ailu-image-post-copy-fields {
   display: grid;
   grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1.4fr) minmax(120px, 0.7fr);

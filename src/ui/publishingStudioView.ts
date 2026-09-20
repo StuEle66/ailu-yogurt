@@ -172,6 +172,8 @@ export class PublishingStudioView extends ItemView {
   // finish while the user prepares another destination.
   private redNotePanel: ImagePostPublishingPanel | null = null;
   private redNotePanelFilePath = '';
+  private imagePostPanel: ImagePostPublishingPanel | null = null;
+  private imagePostPanelFilePath = '';
   private feishuPanel: FeishuPublishingPanel | null = null;
   private feishuPanelFilePath = '';
   private xPanel: XPublishingPanel | null = null;
@@ -231,6 +233,7 @@ export class PublishingStudioView extends ItemView {
         this.refreshTimer = window.setTimeout(() => {
           this.refreshTimer = null;
           if (this.redNotePanelFilePath === file.path) void this.redNotePanel?.refresh();
+          if (this.imagePostPanelFilePath === file.path) void this.imagePostPanel?.refresh();
           if (this.feishuPanelFilePath === file.path) void this.feishuPanel?.refresh();
           if (this.xPanelFilePath === file.path) void this.xPanel?.refresh();
           if (this.target === 'wechat') void this.reload();
@@ -272,7 +275,8 @@ export class PublishingStudioView extends ItemView {
     state: Record<string, unknown>,
     result: ViewStateResult,
   ): Promise<void> {
-    const nextTarget: PublishingTarget = state.target === 'rednote' ? 'rednote' : state.target === 'feishu'
+    const nextTarget: PublishingTarget = state.target === 'rednote' ? 'rednote' : state.target === 'image-post'
+      ? 'image-post' : state.target === 'feishu'
       ? 'feishu'
       : state.target === 'x'
         ? 'x'
@@ -301,8 +305,8 @@ export class PublishingStudioView extends ItemView {
 
   async setFile(file: TFile): Promise<void> {
     if (file.extension !== 'md') return;
-    if (this.file?.path === file.path && this.target === 'rednote') {
-      await this.ensureImagePostPanel()?.refresh();
+    if (this.file?.path === file.path && (this.target === 'rednote' || this.target === 'image-post')) {
+      await this.ensureImagePostPanel(this.target)?.refresh();
       return;
     }
     if (
@@ -327,7 +331,9 @@ export class PublishingStudioView extends ItemView {
   }
 
   async refresh(): Promise<void> {
-    if (this.target === 'rednote') { await this.ensureImagePostPanel()?.refresh(); return; }
+    if (this.target === 'rednote' || this.target === 'image-post') {
+      await this.ensureImagePostPanel(this.target)?.refresh(); return;
+    }
     if (this.target === 'feishu') {
       const panel = this.ensureFeishuPanel();
       if (panel) await panel.refresh();
@@ -349,7 +355,7 @@ export class PublishingStudioView extends ItemView {
       this.loading = false;
       this.error = null;
       await this.render();
-      if (this.target === 'rednote') this.ensureImagePostPanel()?.activate();
+      if (this.target === 'rednote' || this.target === 'image-post') this.ensureImagePostPanel(this.target)?.activate();
       else if (this.target === 'feishu') this.ensureFeishuPanel()?.activate();
       else this.ensureXPanel()?.activate();
       return;
@@ -777,13 +783,13 @@ export class PublishingStudioView extends ItemView {
     });
 
     this.renderTools(shell);
-    if (this.target === 'rednote') {
+    if (this.target === 'rednote' || this.target === 'image-post') {
       this.articleEl = null;
-      const panel = this.ensureImagePostPanel();
+      const panel = this.ensureImagePostPanel(this.target);
       if (panel) {
         await panel.render(shell);
         if (version === this.renderVersion && shell.isConnected) panel.activate();
-      } else this.renderState(shell, 'images', '创建纯照片图文', '选择或拖入照片，无需先打开 Markdown。', 'ailu-publishing-empty');
+      } else this.renderState(shell, 'images', '打开 Markdown 生成图卡', '小红书图卡需要一篇 Markdown；图文草稿仍可创建纯照片内容。', 'ailu-publishing-empty');
       return;
     }
     if (this.target === 'feishu') {
@@ -920,7 +926,11 @@ export class PublishingStudioView extends ItemView {
     }
     tools.createDiv({ cls: 'ailu-publishing-tool-divider' });
     if (this.target === 'rednote') {
-      tools.createSpan({ text: '图文 · 小红书 / 微信贴图' });
+      tools.createSpan({ text: '小红书图卡 · PNG / ZIP / 后台填入' });
+      return;
+    }
+    if (this.target === 'image-post') {
+      tools.createSpan({ text: '图文草稿 · 小红书 / 微信贴图' });
       return;
     }
     if (this.target === 'feishu') {
@@ -1278,6 +1288,7 @@ export class PublishingStudioView extends ItemView {
 
   private isCurrentTargetBusy(): boolean {
     if (this.target === 'rednote') return Boolean(this.redNotePanel?.isBusy());
+    if (this.target === 'image-post') return Boolean(this.imagePostPanel?.isBusy());
     if (this.target === 'feishu') return Boolean(this.feishuPanel?.isBusy());
     if (this.target === 'x') return Boolean(this.xPanel?.isBusy());
     return Boolean(this.operation);
@@ -1285,6 +1296,7 @@ export class PublishingStudioView extends ItemView {
 
   private targetActivity(target: PublishingTarget): PublishingTargetActivity {
     if (target === 'rednote') return this.redNotePanel?.activity() ?? IDLE_PUBLISHING_TARGET_ACTIVITY;
+    if (target === 'image-post') return this.imagePostPanel?.activity() ?? IDLE_PUBLISHING_TARGET_ACTIVITY;
     if (target === 'feishu') return this.feishuPanel?.activity() ?? IDLE_PUBLISHING_TARGET_ACTIVITY;
     if (target === 'x') return this.xPanel?.activity() ?? IDLE_PUBLISHING_TARGET_ACTIVITY;
     if (this.operation === 'publishing') return runningPublishingTargetActivity('正在上传草稿');
@@ -1318,7 +1330,8 @@ export class PublishingStudioView extends ItemView {
   private refreshTargetButtons(): void {
     const labels: Record<PublishingTarget, string> = {
       wechat: '公众号',
-      rednote: '图文',
+      rednote: '小红书图卡',
+      'image-post': '图文草稿',
       feishu: '飞书',
       x: 'X 文章',
     };
@@ -1330,6 +1343,7 @@ export class PublishingStudioView extends ItemView {
   private isAnyTargetBusy(): boolean {
     return Boolean(this.operation)
       || Boolean(this.redNotePanel?.isBusy())
+      || Boolean(this.imagePostPanel?.isBusy())
       || Boolean(this.feishuPanel?.isBusy())
       || Boolean(this.xPanel?.isBusy());
   }
@@ -1338,6 +1352,7 @@ export class PublishingStudioView extends ItemView {
     const labels: string[] = [];
     if (this.operation) labels.push('公众号');
     if (this.redNotePanel?.isBusy()) labels.push('图文');
+    if (this.imagePostPanel?.isBusy()) labels.push('图文草稿');
     if (this.feishuPanel?.isBusy()) labels.push('飞书');
     if (this.xPanel?.isBusy()) labels.push('X 文章');
     return labels;
@@ -1425,28 +1440,41 @@ export class PublishingStudioView extends ItemView {
     this.xPanelFilePath = '';
   }
 
-  private ensureImagePostPanel(): ImagePostPublishingPanel {
+  private ensureImagePostPanel(target: 'rednote' | 'image-post'): ImagePostPublishingPanel | null {
     const file = this.file;
     const filePath = file?.path ?? '';
-    if (this.redNotePanel && this.redNotePanelFilePath === filePath) return this.redNotePanel;
-    this.redNotePanel?.dispose();
-    this.redNotePanelFilePath = filePath;
-    this.redNotePanel = new ImagePostPublishingPanel({
+    if (target === 'rednote' && !file) return null;
+    const current = target === 'rednote' ? this.redNotePanel : this.imagePostPanel;
+    const currentPath = target === 'rednote' ? this.redNotePanelFilePath : this.imagePostPanelFilePath;
+    if (current && currentPath === filePath) return current;
+    current?.dispose();
+    const panel = new ImagePostPublishingPanel({
       app: this.app,
       file,
       workspace: this.deps.imagePostWorkspace,
       getSettings: this.deps.getSettings,
       saveSettings: this.deps.saveSettings,
-      requestRender: () => this.handlePanelRenderRequest('rednote', filePath),
+      requestRender: () => this.handlePanelRenderRequest(target, filePath),
       openSettings: this.deps.openSettings,
+      mode: target === 'rednote' ? 'cards' : 'photos',
     });
-    return this.redNotePanel;
+    if (target === 'rednote') {
+      this.redNotePanel = panel;
+      this.redNotePanelFilePath = filePath;
+    } else {
+      this.imagePostPanel = panel;
+      this.imagePostPanelFilePath = filePath;
+    }
+    return panel;
   }
 
   private resetTargetPanels(): void {
     this.redNotePanel?.dispose();
     this.redNotePanel = null;
     this.redNotePanelFilePath = '';
+    this.imagePostPanel?.dispose();
+    this.imagePostPanel = null;
+    this.imagePostPanelFilePath = '';
     this.resetFeishuPanel();
     this.resetXPanel();
   }

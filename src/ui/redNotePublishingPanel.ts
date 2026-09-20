@@ -177,6 +177,7 @@ export class RedNotePublishingPanel {
   }
 
   isBusy(): boolean { return this.busy; }
+  pageCount(): number { return this.content?.data?.cards.length ?? 0; }
   activity() {
     return this.busy ? runningPublishingTargetActivity('正在生成图卡')
       : this.error ? attentionPublishingTargetActivity('图卡需要检查') : IDLE_PUBLISHING_TARGET_ACTIVITY;

@@ -91,6 +91,11 @@ function normalizeDraft(value: unknown): ImagePostDraft {
   if (value.destinationCopy['wechat-image'] !== undefined) {
     destinationCopy['wechat-image'] = normalizeCopy(value.destinationCopy['wechat-image']);
   }
+  const selectedCardPages = workflow === 'cards' && Array.isArray(value.selectedCardPages)
+    ? [...new Set(value.selectedCardPages.filter((page): page is number => (
+        typeof page === 'number' && Number.isInteger(page) && page > 0
+      )))].sort((left, right) => left - right)
+    : [];
   return {
     id: value.id,
     workflow,
@@ -100,6 +105,7 @@ function normalizeDraft(value: unknown): ImagePostDraft {
     leadMaterialId,
     sharedCopy,
     destinationCopy,
+    selectedCardPages,
   };
 }
 

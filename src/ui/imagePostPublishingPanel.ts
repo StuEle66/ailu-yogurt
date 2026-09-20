@@ -7,11 +7,13 @@ import {
   ManagedImagePostPreviewStore,
   moveImagePostMaterial,
   prepareImagePost,
+  replaceImagePostMaterials,
   removeImagePostMaterial,
   replaceImagePostMaterial,
   resetDestinationImagePostCopy,
   setDestinationImagePostCopy,
   setImagePostLeadMaterial,
+  setImagePostSelectedCardPages,
   updateSharedImagePostCopy,
   type ImagePostCopy,
   type ImagePostDestination,
@@ -35,6 +37,7 @@ interface ImagePostPublishingPanelDeps {
   saveSettings: () => Promise<void>;
   requestRender: () => void;
   openSettings: () => void;
+  mode: 'cards' | 'photos';
 }
 
 interface ElectronWebUtils {
@@ -118,6 +121,10 @@ export class ImagePostPublishingPanel {
     if (!this.draft && !this.loading) void this.load();
     const root = parent.createDiv({ cls: 'ailu-image-post-panel' });
     if (this.cards) await this.cards.render(root);
+    if (this.deps.mode === 'cards') {
+      await this.renderCardComposer(root);
+      return;
+    }
     const composer = root.createDiv({ cls: 'ailu-image-post-composer' });
     const header = composer.createDiv({ cls: 'ailu-image-post-composer-header' });
     const heading = header.createDiv();
@@ -165,13 +172,58 @@ export class ImagePostPublishingPanel {
         articlePath: this.deps.file.path,
         contentVersion: createHash('sha256').update(source, 'utf8').digest('hex'),
       } : null;
-      const draft = await this.deps.workspace.loadDraft(identity, 'photos');
+      const draft = await this.deps.workspace.loadDraft(identity, this.deps.mode);
       if (identity) draft.source = identity;
       if (!draft.sharedCopy.title && this.deps.file) draft.sharedCopy.title = this.deps.file.basename;
       this.draft = draft;
       await this.deps.workspace.saveDraft(draft);
     } catch (error) { this.error = error instanceof Error ? error.message : '图文草稿恢复失败。'; }
     finally { this.loading = false; if (!this.disposed) this.deps.requestRender(); }
+  }
+
+  private async renderCardComposer(root: HTMLElement): Promise<void> {
+    const composer = root.createDiv({ cls: 'ailu-image-post-composer is-card-handoff' });
+    if (this.loading) {
+      composer.createDiv({ cls: 'ailu-rednote-inline-status', text: '正在恢复图卡文案…' });
+      return;
+    }
+    if (this.error) composer.createDiv({ cls: 'ailu-rednote-inline-status is-error', text: this.error });
+    if (this.status) composer.createDiv({ cls: 'ailu-rednote-inline-status', text: this.status });
+    const draft = this.draft;
+    if (!draft || !this.cards) return;
+    const pageCount = this.cards.pageCount();
+    const validSelection = draft.selectedCardPages.filter(page => page <= pageCount);
+    if (pageCount > 0 && validSelection.length === 0 && draft.selectedCardPages.length === 0) {
+      this.draft = setImagePostSelectedCardPages(draft, Array.from({ length: pageCount }, (_, index) => index + 1));
+      await this.persistAndRender();
+      return;
+    }
+    if (validSelection.length !== draft.selectedCardPages.length) {
+      this.draft = setImagePostSelectedCardPages(draft, validSelection);
+      await this.persistAndRender();
+      return;
+    }
+    const selection = composer.createDiv({ cls: 'ailu-image-post-card-selection' });
+    const summary = selection.createDiv({ cls: 'ailu-image-post-card-selection-summary' });
+    summary.createEl('strong', { text: '后台填入页面' });
+    summary.createSpan({ text: pageCount ? `已选 ${validSelection.length}/${pageCount} 页` : '等待生成图卡' });
+    const pages = selection.createDiv({ cls: 'ailu-image-post-card-pages' });
+    for (let page = 1; page <= pageCount; page += 1) {
+      const label = pages.createEl('label');
+      const checkbox = label.createEl('input', { type: 'checkbox' });
+      checkbox.checked = validSelection.includes(page);
+      checkbox.disabled = this.isBusy();
+      label.createSpan({ text: String(page).padStart(2, '0') });
+      checkbox.onchange = () => {
+        if (!this.draft) return;
+        const next = new Set(this.draft.selectedCardPages);
+        if (checkbox.checked) next.add(page); else next.delete(page);
+        this.draft = setImagePostSelectedCardPages(this.draft, [...next]);
+        void this.persistAndRender();
+      };
+    }
+    this.renderCopyEditor(composer, draft);
+    this.renderDestinations(composer, draft);
   }
 
   private renderMaterials(parent: HTMLElement, draft: ImagePostDraft): void {
@@ -339,9 +391,15 @@ export class ImagePostPublishingPanel {
       text: label,
       attr: { type: 'button' },
     });
+    const materialCount = this.deps.mode === 'cards'
+      ? draft.selectedCardPages.length
+      : draft.materials.length;
+    const limitExceeded = destinations.some(destination => materialCount > imagePostLimit(destination));
     button.disabled = this.busy
-      || !draft.materials.length
+      || materialCount === 0
+      || limitExceeded
       || destinations.some(destination => this.destinationRuns[destination].status === 'running');
+    if (limitExceeded) button.title = `所选图片超过平台上限，请减少后重试。`;
     button.onclick = () => void this.handoffDestinations(destinations);
   }
 
@@ -437,6 +495,8 @@ export class ImagePostPublishingPanel {
     this.error = '';
     this.deps.requestRender();
     try {
+      if (this.deps.mode === 'cards') await this.materializeSelectedCards(destination);
+      if (!this.draft) throw new Error('图卡发送快照尚未准备好。');
       const prepared = prepareImagePost(this.draft, [destination]);
       const results = await this.deps.workspace.handoff(prepared, {
         signal: abort.signal,
@@ -471,6 +531,33 @@ export class ImagePostPublishingPanel {
       if (active.abort === abort) this.destinationRuns[destination] = { ...active, abort: null };
       if (!this.disposed) this.deps.requestRender();
     }
+  }
+
+  private async materializeSelectedCards(destination: ImagePostDestination): Promise<void> {
+    if (!this.cards || !this.draft) throw new Error('当前文章没有可发送的图卡。');
+    const selected = new Set(this.draft.selectedCardPages);
+    if (!selected.size) throw new Error('请至少选择一页图卡。');
+    if (selected.size > imagePostLimit(destination)) {
+      throw new Error(`${destinationName(destination)}最多填入 ${imagePostLimit(destination)} 张图片，请减少图卡页数。`);
+    }
+    this.status = '正在冻结所选图卡…';
+    this.deps.requestRender();
+    const rendered = await this.cards.renderImagesForPost();
+    const cards: ImagePostMaterial[] = [];
+    for (let index = 0; index < rendered.length; index += 1) {
+      const page = index + 1;
+      if (!selected.has(page)) continue;
+      cards.push(await this.deps.workspace.importRenderedCard({
+        bytes: new Uint8Array(await rendered[index].blob.arrayBuffer()),
+        fileName: rendered[index].fileName,
+        page,
+        width: 1800,
+        height: 2400,
+      }));
+    }
+    this.draft = replaceImagePostMaterials(this.draft, cards);
+    await this.deps.workspace.saveDraft(this.draft);
+    this.status = `已冻结 ${cards.length} 页图卡。`;
   }
 
   private materialButton(parent: HTMLElement, icon: string, label: string, action: () => void, disabled = false): void {
@@ -545,6 +632,10 @@ class ImagePostMaterialPreviewModal extends Modal {
 
 function destinationName(destination: ImagePostDestination): string {
   return destination === 'rednote' ? '小红书' : '微信贴图';
+}
+
+function imagePostLimit(destination: ImagePostDestination): number {
+  return destination === 'rednote' ? 18 : 20;
 }
 
 async function imageDimensions(file: File): Promise<{ width: number; height: number }> {

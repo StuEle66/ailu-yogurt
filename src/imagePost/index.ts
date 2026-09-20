@@ -62,6 +62,7 @@ export interface ImagePostDraft {
   leadMaterialId: string | null;
   sharedCopy: ImagePostCopy;
   destinationCopy: Partial<Record<ImagePostDestination, ImagePostCopy>>;
+  selectedCardPages: number[];
 }
 
 export interface PreparedImagePost {
@@ -115,6 +116,7 @@ export function createImagePostDraft(input: {
     leadMaterialId: null,
     sharedCopy: { title: '', body: '', topics: [] },
     destinationCopy: {},
+    selectedCardPages: [],
   };
 }
 
@@ -152,6 +154,33 @@ export function resolveImagePostCopy(
   destination: ImagePostDestination,
 ): ImagePostCopy {
   return cloneCopy(draft.destinationCopy[destination] ?? draft.sharedCopy);
+}
+
+export function setImagePostSelectedCardPages(
+  draft: ImagePostDraft,
+  pages: readonly number[],
+): ImagePostDraft {
+  if (draft.workflow !== 'cards') throw new Error('照片草稿不能选择图卡页面。');
+  const selectedCardPages = [...new Set(pages)]
+    .filter(page => Number.isInteger(page) && page > 0)
+    .sort((left, right) => left - right);
+  return nextRevision(draft, { selectedCardPages });
+}
+
+export function replaceImagePostMaterials(
+  draft: ImagePostDraft,
+  materials: readonly ImagePostMaterial[],
+): ImagePostDraft {
+  const expectedKind = draft.workflow === 'cards' ? 'card' : 'photo';
+  if (materials.some(material => material.kind !== expectedKind)) {
+    throw new Error(draft.workflow === 'cards'
+      ? '图卡工作区只能包含渲染图卡。'
+      : '照片草稿只能包含手动选择的照片。');
+  }
+  return nextRevision(draft, {
+    materials: materials.map(material => ({ ...material })),
+    leadMaterialId: materials[0]?.id ?? null,
+  });
 }
 
 function cloneCopy(copy: ImagePostCopy): ImagePostCopy {

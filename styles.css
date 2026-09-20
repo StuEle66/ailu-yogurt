@@ -8987,3 +8987,169 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   margin: 0 auto;
   flex: none;
 }
+
+.ailu-image-post-panel {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  flex-direction: column;
+  background: var(--background-primary);
+}
+
+.ailu-image-post-panel > .ailu-rednote-panel {
+  min-height: min(760px, 72vh);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ailu-image-post-composer {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.ailu-image-post-composer-header,
+.ailu-image-post-handoff,
+.ailu-image-post-destinations,
+.ailu-image-post-material-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ailu-image-post-composer-header {
+  justify-content: space-between;
+}
+
+.ailu-image-post-composer-header h3,
+.ailu-image-post-copy h4 {
+  margin: 0;
+}
+
+.ailu-image-post-composer-header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ailu-image-post-composer-header > button,
+.ailu-image-post-add-cards {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.ailu-image-post-dropzone {
+  display: grid;
+  min-height: 72px;
+  place-items: center;
+  border: 1px dashed var(--background-modifier-border-hover);
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: var(--background-secondary-alt);
+  cursor: pointer;
+}
+
+.ailu-image-post-dropzone.is-dragging {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--interactive-accent) 9%, var(--background-primary));
+}
+
+.ailu-image-post-materials {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.ailu-image-post-material {
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.ailu-image-post-material.is-lead {
+  border-color: var(--interactive-accent);
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
+.ailu-image-post-material > img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  background: var(--background-primary);
+}
+
+.ailu-image-post-material-meta {
+  display: grid;
+  min-width: 0;
+  padding: 8px;
+}
+
+.ailu-image-post-material-meta strong,
+.ailu-image-post-material-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ailu-image-post-material-meta span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.ailu-image-post-material-actions {
+  justify-content: flex-end;
+  padding: 0 6px 6px;
+}
+
+.ailu-image-post-material-actions button {
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+}
+
+.ailu-image-post-copy,
+.ailu-image-post-overrides {
+  display: grid;
+  gap: 10px;
+}
+
+.ailu-image-post-copy-fields {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1.4fr) minmax(120px, 0.7fr);
+  gap: 8px;
+}
+
+.ailu-image-post-copy-fields textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.ailu-image-post-overrides > label,
+.ailu-image-post-destinations > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ailu-image-post-handoff {
+  position: sticky;
+  bottom: 0;
+  justify-content: space-between;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+  backdrop-filter: blur(12px);
+  z-index: 3;
+}
+
+@media (max-width: 620px) {
+  .ailu-image-post-copy-fields { grid-template-columns: 1fr; }
+  .ailu-image-post-handoff { align-items: stretch; flex-direction: column; }
+  .ailu-image-post-composer-header { align-items: flex-start; flex-direction: column; }
+}

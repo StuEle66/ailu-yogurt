@@ -83,7 +83,7 @@ describe('publishing target concurrency UI contract', () => {
       /async setFile\(file: TFile\): Promise<void> \{([\s\S]*?)\n\s{2}\}/,
     )?.[1] ?? '';
     expect(setFileBody).toContain("this.target === 'rednote'");
-    expect(setFileBody).toContain('await this.ensureRedNotePanel()?.refresh()');
+    expect(setFileBody).toContain('await this.ensureImagePostPanel()?.refresh()');
   });
 
   it('keeps an accepted WeChat preflight valid when only the visible tab changes', () => {

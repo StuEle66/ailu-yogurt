@@ -60,8 +60,9 @@ import {
 } from '../wechat/typography';
 import { confirmDraftUpload } from './confirmDraftUploadModal';
 import { FeishuPublishingPanel } from './feishuPublishingPanel';
-import { RedNotePublishingPanel } from './redNotePublishingPanel';
+import { ImagePostPublishingPanel } from './imagePostPublishingPanel';
 import { XPublishingPanel } from './xPublishingPanel';
+import type { ImagePostWorkspaceController } from '../imagePost/controller';
 import type { XArticleUploadTaskCoordinator } from '../xArticle/uploadTaskCoordinator';
 import {
   capturePublishingPreviewScroll,
@@ -93,6 +94,7 @@ import {
 interface PublishingStudioViewDeps {
   larkCli: LarkCliService;
   xArticleUploadTasks: XArticleUploadTaskCoordinator;
+  imagePostWorkspace: ImagePostWorkspaceController;
   getSettings: () => AiluSettings;
   saveSettings: () => Promise<void>;
   editorScrollSync: PublishingEditorScrollSync;
@@ -168,7 +170,7 @@ export class PublishingStudioView extends ItemView {
   // Target changes only remount the visible surface. Panel instances stay
   // alive for the current file so an explicitly started remote task can
   // finish while the user prepares another destination.
-  private redNotePanel: RedNotePublishingPanel | null = null;
+  private redNotePanel: ImagePostPublishingPanel | null = null;
   private redNotePanelFilePath = '';
   private feishuPanel: FeishuPublishingPanel | null = null;
   private feishuPanelFilePath = '';
@@ -300,7 +302,7 @@ export class PublishingStudioView extends ItemView {
   async setFile(file: TFile): Promise<void> {
     if (file.extension !== 'md') return;
     if (this.file?.path === file.path && this.target === 'rednote') {
-      await this.ensureRedNotePanel()?.refresh();
+      await this.ensureImagePostPanel()?.refresh();
       return;
     }
     if (
@@ -325,7 +327,7 @@ export class PublishingStudioView extends ItemView {
   }
 
   async refresh(): Promise<void> {
-    if (this.target === 'rednote') { await this.ensureRedNotePanel()?.refresh(); return; }
+    if (this.target === 'rednote') { await this.ensureImagePostPanel()?.refresh(); return; }
     if (this.target === 'feishu') {
       const panel = this.ensureFeishuPanel();
       if (panel) await panel.refresh();
@@ -347,7 +349,7 @@ export class PublishingStudioView extends ItemView {
       this.loading = false;
       this.error = null;
       await this.render();
-      if (this.target === 'rednote') this.ensureRedNotePanel()?.activate();
+      if (this.target === 'rednote') this.ensureImagePostPanel()?.activate();
       else if (this.target === 'feishu') this.ensureFeishuPanel()?.activate();
       else this.ensureXPanel()?.activate();
       return;
@@ -777,11 +779,11 @@ export class PublishingStudioView extends ItemView {
     this.renderTools(shell);
     if (this.target === 'rednote') {
       this.articleEl = null;
-      const panel = this.ensureRedNotePanel();
+      const panel = this.ensureImagePostPanel();
       if (panel) {
         await panel.render(shell);
         if (version === this.renderVersion && shell.isConnected) panel.activate();
-      } else this.renderState(shell, 'file-text', '打开一篇 Markdown', '小红书图卡将跟随当前文章。', 'ailu-publishing-empty');
+      } else this.renderState(shell, 'images', '创建纯照片图文', '选择或拖入照片，无需先打开 Markdown。', 'ailu-publishing-empty');
       return;
     }
     if (this.target === 'feishu') {
@@ -918,7 +920,7 @@ export class PublishingStudioView extends ItemView {
     }
     tools.createDiv({ cls: 'ailu-publishing-tool-divider' });
     if (this.target === 'rednote') {
-      tools.createSpan({ text: '小红书图卡 · 本地导出' });
+      tools.createSpan({ text: '图文 · 小红书 / 微信贴图' });
       return;
     }
     if (this.target === 'feishu') {
@@ -1316,7 +1318,7 @@ export class PublishingStudioView extends ItemView {
   private refreshTargetButtons(): void {
     const labels: Record<PublishingTarget, string> = {
       wechat: '公众号',
-      rednote: '小红书',
+      rednote: '图文',
       feishu: '飞书',
       x: 'X 文章',
     };
@@ -1335,7 +1337,7 @@ export class PublishingStudioView extends ItemView {
   private busyTargetLabels(): string[] {
     const labels: string[] = [];
     if (this.operation) labels.push('公众号');
-    if (this.redNotePanel?.isBusy()) labels.push('小红书');
+    if (this.redNotePanel?.isBusy()) labels.push('图文');
     if (this.feishuPanel?.isBusy()) labels.push('飞书');
     if (this.xPanel?.isBusy()) labels.push('X 文章');
     return labels;
@@ -1350,7 +1352,7 @@ export class PublishingStudioView extends ItemView {
   }
 
   private handlePanelRenderRequest(target: Exclude<PublishingTarget, 'wechat'>, filePath: string): void {
-    if (this.file?.path !== filePath) return;
+    if ((this.file?.path ?? '') !== filePath) return;
     this.refreshTargetButtons();
     if (this.drainPendingTargetFileIfIdle()) return;
     if (this.target === target) void this.render();
@@ -1423,15 +1425,19 @@ export class PublishingStudioView extends ItemView {
     this.xPanelFilePath = '';
   }
 
-  private ensureRedNotePanel(): RedNotePublishingPanel | null {
+  private ensureImagePostPanel(): ImagePostPublishingPanel {
     const file = this.file;
-    if (!file || this.target !== 'rednote') return null;
-    if (this.redNotePanel && this.redNotePanelFilePath === file.path) return this.redNotePanel;
+    const filePath = file?.path ?? '';
+    if (this.redNotePanel && this.redNotePanelFilePath === filePath) return this.redNotePanel;
     this.redNotePanel?.dispose();
-    this.redNotePanelFilePath = file.path;
-    this.redNotePanel = new RedNotePublishingPanel({
-      app: this.app, file, getSettings: this.deps.getSettings, saveSettings: this.deps.saveSettings,
-      requestRender: () => this.handlePanelRenderRequest('rednote', file.path),
+    this.redNotePanelFilePath = filePath;
+    this.redNotePanel = new ImagePostPublishingPanel({
+      app: this.app,
+      file,
+      workspace: this.deps.imagePostWorkspace,
+      getSettings: this.deps.getSettings,
+      saveSettings: this.deps.saveSettings,
+      requestRender: () => this.handlePanelRenderRequest('rednote', filePath),
       openSettings: this.deps.openSettings,
     });
     return this.redNotePanel;

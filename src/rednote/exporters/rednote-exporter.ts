@@ -41,6 +41,11 @@ interface RedNotePreparedData {
   template: RedNoteTemplatePreset;
 }
 
+export interface RenderedRedNoteImage {
+  fileName: string;
+  blob: Blob;
+}
+
 interface PaginationEntry {
   node: Element | null;
   sectionTitle?: string;
@@ -212,26 +217,8 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
       return { success: false, message: '没有可导出的内容' };
     }
 
-    const exportSurface = document.createElement('div');
-    exportSurface.className = 'ailu-rednote-scope ailu-rednote-rednote-export-surface';
-    exportSurface.innerHTML = content.previewHtml;
-    document.body.appendChild(exportSurface);
-
     try {
-      const imagePreview = exportSurface.querySelector<HTMLElement>('.ailu-rednote-image-preview');
-      if (!imagePreview) {
-        throw new Error('未找到小红书预览区域');
-      }
-
-      const snapshots: Array<{ fileName: string; blob: Blob }> = [];
-
-      for (let i = 0; i < cards.length; i++) {
-        this.updatePreviewState(exportSurface, i);
-        imagePreview.classList.toggle('ailu-rednote-jacky-cover-active', cards[i].kind === 'cover');
-        await this.delay(120);
-        const blob = await this.capturePreview(imagePreview);
-        snapshots.push({ fileName: cards[i].fileName, blob });
-      }
+      const snapshots = await this.renderImages(content, context);
 
       const zip = new JSZip();
       snapshots.forEach((snapshot) => {
@@ -256,6 +243,33 @@ export class RedNoteExporter implements PlatformExporter<RedNotePreparedData> {
     } catch (error) {
       console.error('RedNote export failed:', error);
       return { success: false, message: `导出失败: ${String(error)}` };
+    }
+  }
+
+  async renderImages(
+    content: PreparedPlatformContent<RedNotePreparedData>,
+    _context: PlatformRenderContext,
+  ): Promise<RenderedRedNoteImage[]> {
+    const cards = content.data?.cards ?? [];
+    if (cards.length === 0) throw new Error('没有可渲染的图卡');
+    const exportSurface = document.createElement('div');
+    exportSurface.className = 'ailu-rednote-scope ailu-rednote-rednote-export-surface';
+    exportSurface.innerHTML = content.previewHtml;
+    document.body.appendChild(exportSurface);
+    try {
+      const imagePreview = exportSurface.querySelector<HTMLElement>('.ailu-rednote-image-preview');
+      if (!imagePreview) throw new Error('未找到小红书预览区域');
+      const snapshots: RenderedRedNoteImage[] = [];
+      for (let index = 0; index < cards.length; index += 1) {
+        this.updatePreviewState(exportSurface, index);
+        imagePreview.classList.toggle('ailu-rednote-jacky-cover-active', cards[index].kind === 'cover');
+        await this.delay(120);
+        snapshots.push({
+          fileName: cards[index].fileName,
+          blob: await this.capturePreview(imagePreview),
+        });
+      }
+      return snapshots;
     } finally {
       exportSurface.remove();
     }

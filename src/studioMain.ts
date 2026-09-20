@@ -1,5 +1,6 @@
 import { type App, Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { createHash, randomBytes } from 'node:crypto';
+import path from 'node:path';
 
 import { ChatContextService, ChatRunCoordinator } from './chat';
 import { VerifiedMemoryReadService } from './memory/verifiedMemory';
@@ -38,6 +39,13 @@ import {
   type ProcessWriteLock,
 } from './storage/processWriteLock';
 import { ailuHome, xCookiesPath } from './paths';
+import {
+  createWechatImagePostAdapter,
+  createXiaohongshuImagePostAdapter,
+  ImagePostHandoffCoordinator,
+  UnavailableImagePostBrowserDriver,
+} from './imagePost';
+import { ImagePostWorkspaceController } from './imagePost/controller';
 import { durableRuntimeFingerprint } from './storage/runtimeSnapshot';
 import { appendLocalLog } from './storage/localLog';
 import {
@@ -128,6 +136,7 @@ export default class AiluPlugin extends Plugin {
   private readonly publishingEditorScrollSync = new PublishingEditorScrollSync();
   private readonly xArticleUploadTasks = new XArticleUploadTaskCoordinator();
   private readonly xCookieMutations = new XCookieMutationCoordinator();
+  private imagePostWorkspace!: ImagePostWorkspaceController;
   private legacyXCookiesPath = '';
   private canonicalXCookiesVerified = false;
 
@@ -136,6 +145,13 @@ export default class AiluPlugin extends Plugin {
     const vaultBasePath = getVaultBasePath(this.app);
     const supportsPhysicalWriter = process.platform !== 'win32' && Boolean(vaultBasePath);
     const writableVaultBasePath = supportsPhysicalWriter ? vaultBasePath : null;
+    this.imagePostWorkspace = new ImagePostWorkspaceController(
+      path.join(ailuHome(), 'image-post'),
+      new ImagePostHandoffCoordinator([
+        createXiaohongshuImagePostAdapter(new UnavailableImagePostBrowserDriver('小红书后台填充尚未启用。')),
+        createWechatImagePostAdapter(new UnavailableImagePostBrowserDriver('微信贴图后台填充尚未启用。')),
+      ]),
+    );
     this.homeProcessWriteLock = supportsPhysicalWriter
       ? PythonFcntlProcessWriteLock.forPrivateDirectory(
         ailuHome(),
@@ -522,6 +538,7 @@ export default class AiluPlugin extends Plugin {
     const createPublishingView = (leaf: WorkspaceLeaf) => new PublishingStudioView(leaf, {
       larkCli: this.larkCliService,
       xArticleUploadTasks: this.xArticleUploadTasks,
+      imagePostWorkspace: this.imagePostWorkspace,
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
       authorizeXCookieMutation: () => this.assertHomeWriteFenceHeld(),

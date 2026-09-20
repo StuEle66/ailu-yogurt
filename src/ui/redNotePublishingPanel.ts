@@ -57,6 +57,7 @@ import {
   RedNoteExporter, RedNoteSettingsManager, MarkdownConverter, ImageResolver,
   loadBundledFonts, RedNoteAboutModal, REDNOTE_HANDWRITING_FONT, type RedNoteSettings,
 } from '../rednote';
+import type { RenderedRedNoteImage } from '../rednote/exporters/rednote-exporter';
 import { IDLE_PUBLISHING_TARGET_ACTIVITY, runningPublishingTargetActivity, attentionPublishingTargetActivity } from './publishingTargetActivity';
 
 /** Read the editor for this exact note, even when another leaf is active. */
@@ -247,6 +248,15 @@ export class RedNotePublishingPanel {
     } catch (error) {
       this.error = error instanceof Error ? error.message : '设置保存失败。';
     } finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
+  }
+
+  async renderImagesForPost(): Promise<RenderedRedNoteImage[]> {
+    if (this.busy || !this.content) throw new Error('图卡仍在生成，请稍后重试。');
+    this.assertSource();
+    if (await readRedNoteSource(this.deps.app, this.deps.file) !== this.source) {
+      throw new Error('文章已变化，请先刷新图卡后再发送。');
+    }
+    return this.exporter.renderImages(this.content, this.context());
   }
 
   async render(parent: HTMLElement): Promise<void> {

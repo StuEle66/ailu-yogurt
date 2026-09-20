@@ -72,6 +72,17 @@ test('export all produces an ordered ZIP even when the article has one page', as
   expect(zipState.files).toEqual(['body-02.png']);
 });
 
+test('render images returns the frozen ordered cards without downloading files', async () => {
+  const { exporter, context, content } = fixture();
+  const images = await exporter.renderImages(content, context);
+  expect(images.map(image => image.fileName)).toEqual(['cover.png', 'body-02.png']);
+  expect((JSON.parse(await images[0].blob.text()) as { visible: string }).visible).toBe('Cover');
+  expect((JSON.parse(await images[1].blob.text()) as { visible: string }).visible).toBe('Body page');
+  expect(downloaded).toBeUndefined();
+  expect(fileName).toBe('');
+  expect(document.body.children).toHaveLength(0);
+});
+
 test('remounting a preview restores the selected page and reports subsequent navigation', () => {
   const { exporter, content } = fixture();
   const host = document.createElement('div');

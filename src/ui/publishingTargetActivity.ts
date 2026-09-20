@@ -39,7 +39,7 @@ export function publishingTargetAccessibleLabel(input: {
 
 export const PUBLISHING_TARGETS = [
   { id: 'wechat', label: '公众号' },
-  { id: 'rednote', label: '小红书' },
+  { id: 'rednote', label: '图文' },
   { id: 'feishu', label: '飞书' },
   { id: 'x', label: 'X 文章' },
 ] as const;

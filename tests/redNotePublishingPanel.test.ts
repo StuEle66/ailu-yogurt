@@ -9,7 +9,7 @@ import { PUBLISHING_TARGETS } from '../src/ui/publishingTargetActivity';
 
 describe('publishing target choices', () => {
   test('offers RedNote between WeChat and Feishu', () => {
-    expect(PUBLISHING_TARGETS.map(target => target.label)).toEqual(['公众号', '小红书', '飞书', 'X 文章']);
+    expect(PUBLISHING_TARGETS.map(target => target.label)).toEqual(['公众号', '图文', '飞书', 'X 文章']);
   });
 });
 

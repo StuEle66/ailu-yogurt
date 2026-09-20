@@ -9057,6 +9057,167 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   background: color-mix(in srgb, var(--interactive-accent) 9%, var(--background-primary));
 }
 
+.ailu-image-post-photo-workspace {
+  display: grid;
+  min-height: 0;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-secondary-alt);
+}
+
+.ailu-image-post-photo-workspace.is-dragging {
+  border-color: var(--interactive-accent);
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
+button.ailu-image-post-photo-empty {
+  display: grid;
+  min-height: min(42vh, 360px);
+  place-content: center;
+  gap: 8px;
+  border: 1px dashed var(--background-modifier-border-hover);
+  background: var(--background-primary);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.ailu-image-post-photo-empty > svg {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto;
+}
+
+.ailu-image-post-photo-empty > strong {
+  color: var(--text-normal);
+}
+
+.ailu-image-post-photo-stage {
+  display: grid;
+  width: 100%;
+  min-height: 220px;
+  max-height: min(58vh, 680px);
+  place-items: center;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--background-primary);
+}
+
+.ailu-image-post-photo-stage > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: min(58vh, 680px);
+  object-fit: contain;
+}
+
+.ailu-image-post-photo-error {
+  display: grid;
+  max-width: 360px;
+  justify-items: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.ailu-image-post-photo-navigation,
+.ailu-image-post-photo-current,
+.ailu-image-post-recovery-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ailu-image-post-photo-navigation {
+  justify-content: center;
+}
+
+.ailu-image-post-photo-navigation > span {
+  min-width: 48px;
+  color: var(--text-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ailu-image-post-photo-current {
+  min-width: 0;
+}
+
+.ailu-image-post-photo-current > strong {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ailu-image-post-photo-current > span {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ailu-image-post-photo-current > .ailu-image-post-material-actions {
+  margin-left: auto;
+  padding: 0;
+}
+
+.ailu-image-post-photo-thumbnails {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 1px 6px;
+}
+
+.ailu-image-post-photo-thumbnails > button {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid transparent;
+  background: var(--background-primary);
+}
+
+.ailu-image-post-photo-thumbnails > button.is-active {
+  border-color: var(--interactive-accent);
+}
+
+.ailu-image-post-photo-thumbnails img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ailu-image-post-photo-thumbnails button > span:last-child {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.68);
+  color: white;
+  font-size: 10px;
+}
+
+.ailu-image-post-recovery {
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ailu-image-post-recovery-row {
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
 .ailu-image-post-materials {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -9227,6 +9388,19 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   gap: 8px;
 }
 
+.ailu-image-post-copy-fields > label {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ailu-image-post-copy-fields input,
+.ailu-image-post-copy-fields textarea {
+  width: 100%;
+}
+
 .ailu-image-post-copy-fields textarea {
   min-height: 72px;
   resize: vertical;
@@ -9237,6 +9411,12 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.ailu-image-post-overrides > summary {
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
 }
 
 .ailu-image-post-handoff {

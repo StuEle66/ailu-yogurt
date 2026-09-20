@@ -27,12 +27,16 @@ describe('image post creator studio', () => {
   it('offers direct Xiaohongshu, direct WeChat, and parallel handoff actions', () => {
     expect(imagePostPanel).toContain("'填入小红书'");
     expect(imagePostPanel).toContain("'填入微信贴图'");
-    expect(imagePostPanel).toContain("'双平台填入'");
+    expect(imagePostPanel).toContain("'一键填入双平台'");
     expect(imagePostPanel).not.toContain("text: '填入所选后台'");
   });
 
-  it('embeds a read-only card preview without allowing cards into the photo draft', () => {
-    expect(imagePostPanel).toContain('await this.cards.render(root)');
+  it('keeps the photo draft independent from the Markdown card renderer', () => {
+    expect(imagePostPanel).toContain("deps.mode === 'cards' && deps.file");
+    expect(imagePostPanel).toContain("'继续添加' : '选择照片'");
+    expect(imagePostPanel).toContain("draft, '一键填入双平台'");
+    expect(imagePostPanel).toContain('setImagePostActiveMaterial');
+    expect(imagePostPanel).not.toContain('上方图卡预览仅供参考');
     expect(imagePostPanel).not.toContain('加入当前 Markdown 图卡');
     expect(imagePostPanel).not.toContain('materializeCards');
   });

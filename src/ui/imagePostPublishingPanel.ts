@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { Modal, Notice, setIcon, type App, type TFile } from 'obsidian';
+import { Notice, setIcon, type App, type TFile } from 'obsidian';
 
 import {
   addImagePostMaterial,
@@ -12,6 +12,7 @@ import {
   replaceImagePostMaterial,
   resetDestinationImagePostCopy,
   setDestinationImagePostCopy,
+  setImagePostActiveMaterial,
   setImagePostLeadMaterial,
   setImagePostSelectedCardPages,
   updateSharedImagePostCopy,
@@ -40,14 +41,6 @@ interface ImagePostPublishingPanelDeps {
   mode: 'cards' | 'photos';
 }
 
-interface ElectronWebUtils {
-  getPathForFile(file: File): string;
-}
-
-const electronWebUtils = (window as unknown as {
-  require?: (moduleId: 'electron') => { webUtils?: ElectronWebUtils };
-}).require?.('electron').webUtils;
-
 interface MaterialPreviewState {
   contentHash: string;
   status: 'loading' | 'ready' | 'error';
@@ -70,6 +63,9 @@ export class ImagePostPublishingPanel {
   private busy = false;
   private error = '';
   private status = '';
+  private legacyDraft: ImagePostDraft | null = null;
+  private backupDraft: ImagePostDraft | null = null;
+  private saveTimer: number | null = null;
   private readonly destinationRuns: Record<ImagePostDestination, DestinationRunState> = {
     rednote: { status: 'idle', message: '', abort: null },
     'wechat-image': { status: 'idle', message: '', abort: null },
@@ -80,7 +76,7 @@ export class ImagePostPublishingPanel {
     this.previewStore = new ManagedImagePostPreviewStore({
       readMaterial: material => deps.workspace.readMaterialBytes(material),
     });
-    this.cards = deps.file ? new RedNotePublishingPanel({
+    this.cards = deps.mode === 'cards' && deps.file ? new RedNotePublishingPanel({
       app: deps.app,
       file: deps.file,
       getSettings: deps.getSettings,
@@ -111,6 +107,8 @@ export class ImagePostPublishingPanel {
   refresh(): Promise<void> { return this.cards?.refresh() ?? Promise.resolve(); }
   dispose(): void {
     this.disposed = true;
+    if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    void this.flushDraftSave();
     this.previewStore.dispose();
     this.materialPreviews.clear();
     for (const run of Object.values(this.destinationRuns)) run.abort?.abort();
@@ -120,19 +118,19 @@ export class ImagePostPublishingPanel {
   async render(parent: HTMLElement): Promise<void> {
     if (!this.draft && !this.loading) void this.load();
     const root = parent.createDiv({ cls: 'ailu-image-post-panel' });
-    if (this.cards) await this.cards.render(root);
     if (this.deps.mode === 'cards') {
+      if (this.cards) await this.cards.render(root);
       await this.renderCardComposer(root);
       return;
     }
-    const composer = root.createDiv({ cls: 'ailu-image-post-composer' });
+    const composer = root.createDiv({ cls: 'ailu-image-post-composer is-photo-workspace' });
     const header = composer.createDiv({ cls: 'ailu-image-post-composer-header' });
     const heading = header.createDiv();
     heading.createEl('h3', { text: '图文草稿' });
-    heading.createEl('p', { text: this.deps.file ? '手动照片单独发送；上方图卡预览仅供参考。' : '纯照片模式；无需打开 Markdown。' });
+    heading.createEl('p', { text: '选择照片，填写文案，再填入小红书和微信贴图后台。' });
     const importButton = header.createEl('button', { attr: { type: 'button' } });
     setIcon(importButton.createSpan(), 'images');
-    importButton.createSpan({ text: '选择照片' });
+    importButton.createSpan({ text: this.draft?.materials.length ? '继续添加' : '选择照片' });
     importButton.disabled = this.busy;
     importButton.onclick = () => void this.choosePhotos();
 
@@ -145,20 +143,8 @@ export class ImagePostPublishingPanel {
     const draft = this.draft;
     if (!draft) return;
 
-    const drop = composer.createDiv({
-      cls: 'ailu-image-post-dropzone',
-      attr: { tabindex: '0', role: 'button', 'aria-label': '拖入或选择图文照片' },
-    });
-    drop.createSpan({ text: draft.materials.length ? `${draft.materials.length} 张照片` : '拖入 JPEG、PNG 或 WebP 照片' });
-    drop.ondragover = event => { event.preventDefault(); drop.addClass('is-dragging'); };
-    drop.ondragleave = () => drop.removeClass('is-dragging');
-    drop.ondrop = event => {
-      event.preventDefault(); drop.removeClass('is-dragging');
-      void this.importFiles(event.dataTransfer?.files ?? null);
-    };
-    drop.onclick = () => void this.choosePhotos();
-
-    this.renderMaterials(composer, draft);
+    this.renderLegacyRecovery(composer);
+    this.renderPhotoWorkspace(composer, draft);
     this.renderCopyEditor(composer, draft);
     this.renderDestinations(composer, draft);
   }
@@ -167,15 +153,26 @@ export class ImagePostPublishingPanel {
     this.loading = true;
     this.deps.requestRender();
     try {
-      const source = this.deps.file ? await readRedNoteSource(this.deps.app, this.deps.file) : '';
+      const source = this.deps.mode === 'cards' && this.deps.file
+        ? await readRedNoteSource(this.deps.app, this.deps.file)
+        : '';
       const identity = this.deps.file ? {
         articlePath: this.deps.file.path,
         contentVersion: createHash('sha256').update(source, 'utf8').digest('hex'),
       } : null;
-      const draft = await this.deps.workspace.loadDraft(identity, this.deps.mode);
-      if (identity) draft.source = identity;
-      if (!draft.sharedCopy.title && this.deps.file) draft.sharedCopy.title = this.deps.file.basename;
+      const draft = await this.deps.workspace.loadDraft(
+        this.deps.mode === 'cards' ? identity : null,
+        this.deps.mode,
+      );
+      if (this.deps.mode === 'cards' && identity) draft.source = identity;
+      if (this.deps.mode === 'cards' && !draft.sharedCopy.title && this.deps.file) {
+        draft.sharedCopy.title = this.deps.file.basename;
+      }
       this.draft = draft;
+      if (this.deps.mode === 'photos') {
+        this.legacyDraft = identity ? await this.deps.workspace.loadLegacyPhotoDraft(identity) : null;
+        this.backupDraft = await this.deps.workspace.loadStandalonePhotoDraftBackup();
+      }
       await this.deps.workspace.saveDraft(draft);
     } catch (error) { this.error = error instanceof Error ? error.message : '图文草稿恢复失败。'; }
     finally { this.loading = false; if (!this.disposed) this.deps.requestRender(); }
@@ -226,48 +223,112 @@ export class ImagePostPublishingPanel {
     this.renderDestinations(composer, draft);
   }
 
-  private renderMaterials(parent: HTMLElement, draft: ImagePostDraft): void {
+  private renderLegacyRecovery(parent: HTMLElement): void {
+    if (!this.legacyDraft && !this.backupDraft) return;
+    const recovery = parent.createEl('details', { cls: 'ailu-image-post-recovery' });
+    recovery.createEl('summary', { text: '恢复旧照片草稿' });
+    if (this.legacyDraft) {
+      const row = recovery.createDiv({ cls: 'ailu-image-post-recovery-row' });
+      row.createSpan({ text: `当前文章有旧草稿（${this.legacyDraft.materials.length} 张照片）` });
+      const restore = row.createEl('button', { text: '复制到独立草稿', attr: { type: 'button' } });
+      restore.onclick = () => void this.restoreLegacyDraft();
+    }
+    if (this.backupDraft) {
+      const row = recovery.createDiv({ cls: 'ailu-image-post-recovery-row' });
+      row.createSpan({ text: `恢复前版本（${this.backupDraft.materials.length} 张照片）` });
+      const restore = row.createEl('button', { text: '恢复此版本', attr: { type: 'button' } });
+      restore.onclick = () => void this.restorePhotoBackup();
+    }
+  }
+
+  private renderPhotoWorkspace(parent: HTMLElement, draft: ImagePostDraft): void {
     this.previewStore.retain(draft.materials);
     const activeIds = new Set(draft.materials.map(material => material.id));
     for (const id of this.materialPreviews.keys()) {
       if (!activeIds.has(id)) this.materialPreviews.delete(id);
     }
-    const list = parent.createDiv({ cls: 'ailu-image-post-materials' });
+    const workspace = parent.createDiv({ cls: 'ailu-image-post-photo-workspace' });
+    workspace.ondragover = event => { event.preventDefault(); workspace.addClass('is-dragging'); };
+    workspace.ondragleave = () => workspace.removeClass('is-dragging');
+    workspace.ondrop = event => {
+      event.preventDefault();
+      workspace.removeClass('is-dragging');
+      void this.importFiles(event.dataTransfer?.files ?? null);
+    };
+    if (!draft.materials.length) {
+      const empty = workspace.createEl('button', {
+        cls: 'ailu-image-post-photo-empty',
+        attr: { type: 'button', 'aria-label': '选择或拖入照片' },
+      });
+      setIcon(empty.createSpan(), 'images');
+      empty.createEl('strong', { text: '选择或拖入照片' });
+      empty.createSpan({ text: '支持 JPEG、PNG、WebP，可一次选择多张' });
+      empty.onclick = () => void this.choosePhotos();
+      return;
+    }
+
+    const activeIndex = Math.max(0, draft.materials.findIndex(material => (
+      material.id === draft.activeMaterialId
+    )));
+    const active = draft.materials[activeIndex];
+    const preview = this.ensureMaterialPreview(active);
+    const stage = workspace.createDiv({ cls: 'ailu-image-post-photo-stage' });
+    if (preview?.status === 'ready' && preview.url) {
+      stage.createEl('img', {
+        attr: { src: preview.url, alt: active.kind === 'photo' ? active.originalName : active.fileName },
+      });
+    } else if (preview?.status === 'error') {
+      const failure = stage.createDiv({ cls: 'ailu-image-post-photo-error' });
+      setIcon(failure.createSpan(), 'image-off');
+      failure.createEl('strong', { text: '图片无法读取' });
+      failure.createSpan({ text: preview.message });
+      const retry = failure.createEl('button', { text: '重新选择', attr: { type: 'button' } });
+      retry.onclick = () => void this.chooseReplacement(active.id);
+    } else {
+      stage.createDiv({ cls: 'ailu-image-post-material-placeholder', text: '正在读取图片…' });
+    }
+
+    const navigation = workspace.createDiv({ cls: 'ailu-image-post-photo-navigation' });
+    const previous = navigation.createEl('button', { attr: { type: 'button', 'aria-label': '上一张照片' } });
+    setIcon(previous, 'chevron-left');
+    previous.disabled = activeIndex === 0;
+    previous.onclick = () => this.selectMaterial(draft.materials[activeIndex - 1]?.id);
+    navigation.createSpan({ text: `${activeIndex + 1}/${draft.materials.length}` });
+    const next = navigation.createEl('button', { attr: { type: 'button', 'aria-label': '下一张照片' } });
+    setIcon(next, 'chevron-right');
+    next.disabled = activeIndex === draft.materials.length - 1;
+    next.onclick = () => this.selectMaterial(draft.materials[activeIndex + 1]?.id);
+
+    const details = workspace.createDiv({ cls: 'ailu-image-post-photo-current' });
+    details.createEl('strong', { text: active.kind === 'photo' ? active.originalName : active.fileName });
+    details.createSpan({ text: `${active.width}×${active.height}${active.id === draft.leadMaterialId ? ' · 首图' : ''}` });
+    const actions = details.createDiv({ cls: 'ailu-image-post-material-actions' });
+    this.materialButton(actions, 'arrow-left', '前移', () => this.moveMaterial(active.id, activeIndex - 1), activeIndex === 0);
+    this.materialButton(actions, 'arrow-right', '后移', () => this.moveMaterial(active.id, activeIndex + 1), activeIndex === draft.materials.length - 1);
+    this.materialButton(actions, 'star', '设为首图', () => this.setLead(active.id), active.id === draft.leadMaterialId);
+    this.materialButton(actions, 'x', '移除', () => this.removeMaterial(active.id));
+
+    const thumbnails = workspace.createDiv({ cls: 'ailu-image-post-photo-thumbnails' });
     draft.materials.forEach((material, index) => {
-      const item = list.createDiv({ cls: material.id === draft.leadMaterialId ? 'ailu-image-post-material is-lead' : 'ailu-image-post-material' });
-      const preview = this.materialPreviews.get(material.id);
-      if (!preview || preview.contentHash !== material.contentHash) {
-        this.loadMaterialPreview(material);
-        item.createDiv({ cls: 'ailu-image-post-material-placeholder', text: '正在读取图片…' });
-      } else if (preview.status === 'ready' && preview.url) {
-        const open = item.createEl('button', {
-          cls: 'ailu-image-post-material-preview',
-          attr: { type: 'button', 'aria-label': `查看大图：${material.fileName}` },
-        });
-        open.createEl('img', { attr: { src: preview.url, alt: material.fileName } });
-        open.onclick = () => this.openMaterialPreview(draft, material.id);
-      } else if (preview.status === 'error') {
-        const failure = item.createDiv({ cls: 'ailu-image-post-material-error' });
-        setIcon(failure.createSpan(), 'image-off');
-        failure.createEl('strong', { text: '图片无法读取' });
-        failure.createSpan({ text: preview.message });
-        const recovery = failure.createDiv({ cls: 'ailu-image-post-material-recovery' });
-        const remove = recovery.createEl('button', { text: '移除', attr: { type: 'button' } });
-        remove.onclick = () => this.removeMaterial(material.id);
-        const replace = recovery.createEl('button', { text: '重新选择', attr: { type: 'button' } });
-        replace.onclick = () => void this.chooseReplacement(material.id);
+      const thumbnailPreview = this.ensureMaterialPreview(material);
+      const button = thumbnails.createEl('button', {
+        cls: material.id === active.id ? 'is-active' : undefined,
+        attr: { type: 'button', 'aria-label': `查看第 ${index + 1} 张照片` },
+      });
+      if (thumbnailPreview?.status === 'ready' && thumbnailPreview.url) {
+        button.createEl('img', { attr: { src: thumbnailPreview.url, alt: material.fileName } });
       } else {
-        item.createDiv({ cls: 'ailu-image-post-material-placeholder', text: '正在读取图片…' });
+        setIcon(button, thumbnailPreview?.status === 'error' ? 'image-off' : 'image');
       }
-      const meta = item.createDiv({ cls: 'ailu-image-post-material-meta' });
-      meta.createEl('strong', { text: material.kind === 'card' ? `图卡 ${material.renderedPage}` : material.originalName });
-      meta.createSpan({ text: `${index + 1} · ${material.width}×${material.height}` });
-      const actions = item.createDiv({ cls: 'ailu-image-post-material-actions' });
-      this.materialButton(actions, 'arrow-left', '前移', () => this.moveMaterial(material.id, index - 1), index === 0);
-      this.materialButton(actions, 'arrow-right', '后移', () => this.moveMaterial(material.id, index + 1), index === draft.materials.length - 1);
-      this.materialButton(actions, 'star', '设为首图', () => this.setLead(material.id), material.id === draft.leadMaterialId);
-      this.materialButton(actions, 'x', '移除', () => this.removeMaterial(material.id));
+      button.createSpan({ text: String(index + 1) });
+      button.onclick = () => this.selectMaterial(material.id);
     });
+  }
+
+  private ensureMaterialPreview(material: ImagePostMaterial): MaterialPreviewState | undefined {
+    const preview = this.materialPreviews.get(material.id);
+    if (!preview || preview.contentHash !== material.contentHash) this.loadMaterialPreview(material);
+    return this.materialPreviews.get(material.id);
   }
 
   private loadMaterialPreview(material: ImagePostMaterial): void {
@@ -296,25 +357,16 @@ export class ImagePostPublishingPanel {
     });
   }
 
-  private openMaterialPreview(draft: ImagePostDraft, materialId: string): void {
-    const materials = draft.materials.flatMap(material => {
-      const preview = this.materialPreviews.get(material.id);
-      return preview?.status === 'ready' && preview.url
-        ? [{ material, url: preview.url }]
-        : [];
-    });
-    const index = materials.findIndex(entry => entry.material.id === materialId);
-    if (index >= 0) new ImagePostMaterialPreviewModal(this.deps.app, materials, index).open();
-  }
-
   private renderCopyEditor(parent: HTMLElement, draft: ImagePostDraft): void {
     const section = parent.createDiv({ cls: 'ailu-image-post-copy' });
-    section.createEl('h4', { text: '共用文案' });
+    section.createEl('h4', { text: '发布文案' });
     this.renderCopyFields(section, draft.sharedCopy, copy => {
       if (!this.draft) return;
-      this.draft = updateSharedImagePostCopy(this.draft, copy); void this.persistAndRender();
+      this.draft = updateSharedImagePostCopy(this.draft, copy);
+      this.scheduleDraftSave();
     });
-    const overrides = section.createDiv({ cls: 'ailu-image-post-overrides' });
+    const overrides = section.createEl('details', { cls: 'ailu-image-post-overrides' });
+    overrides.createEl('summary', { text: '分别调整平台文案' });
     for (const destination of ['rednote', 'wechat-image'] as const) {
       const label = destination === 'rednote' ? '小红书单独调整' : '微信贴图单独调整';
       const enabled = Boolean(draft.destinationCopy[destination]);
@@ -331,31 +383,41 @@ export class ImagePostPublishingPanel {
       };
       if (enabled) this.renderCopyFields(overrides, draft.destinationCopy[destination]!, copy => {
         if (!this.draft) return;
-        this.draft = setDestinationImagePostCopy(this.draft, destination, copy); void this.persistAndRender();
+        this.draft = setDestinationImagePostCopy(this.draft, destination, copy);
+        this.scheduleDraftSave();
       }, destination === 'rednote' ? '小红书' : '微信贴图');
     }
   }
 
   private renderCopyFields(parent: HTMLElement, copy: ImagePostCopy, onChange: (copy: ImagePostCopy) => void, prefix = ''): void {
     const fields = parent.createDiv({ cls: 'ailu-image-post-copy-fields' });
-    const title = fields.createEl('input', { type: 'text', value: copy.title, attr: { placeholder: `${prefix}标题`, 'aria-label': `${prefix || '共用'}标题` } });
-    const body = fields.createEl('textarea', { attr: { placeholder: `${prefix}文案`, 'aria-label': `${prefix || '共用'}文案` } });
+    const titleLabel = fields.createEl('label');
+    titleLabel.createSpan({ text: `${prefix ? `${prefix} ` : ''}标题` });
+    const title = titleLabel.createEl('input', { type: 'text', value: copy.title, attr: { placeholder: '填写标题', 'aria-label': `${prefix || '共用'}标题` } });
+    const bodyLabel = fields.createEl('label');
+    bodyLabel.createSpan({ text: `${prefix ? `${prefix} ` : ''}文案` });
+    const body = bodyLabel.createEl('textarea', { attr: { placeholder: '填写正文文案', 'aria-label': `${prefix || '共用'}文案` } });
     body.value = copy.body;
-    const topics = fields.createEl('input', { type: 'text', value: copy.topics.join(' '), attr: { placeholder: '话题，以空格分隔', 'aria-label': `${prefix || '共用'}话题` } });
+    const topicsLabel = fields.createEl('label');
+    topicsLabel.createSpan({ text: `${prefix ? `${prefix} ` : ''}话题 tag` });
+    const topics = topicsLabel.createEl('input', { type: 'text', value: copy.topics.join(' '), attr: { placeholder: '#AI #工作流', 'aria-label': `${prefix || '共用'}话题` } });
     const update = (): void => onChange({
       title: title.value,
       body: body.value,
       topics: topics.value.split(/\s+/u).map(value => value.replace(/^#+/u, '')).filter(Boolean),
     });
-    title.onchange = update; body.onchange = update; topics.onchange = update;
+    title.oninput = update; body.oninput = update; topics.oninput = update;
+    title.onchange = () => void this.flushDraftSave();
+    body.onchange = () => void this.flushDraftSave();
+    topics.onchange = () => void this.flushDraftSave();
   }
 
   private renderDestinations(parent: HTMLElement, draft: ImagePostDraft): void {
     const footer = parent.createDiv({ cls: 'ailu-image-post-handoff' });
     const actions = footer.createDiv({ cls: 'ailu-image-post-handoff-actions' });
+    this.handoffButton(actions, draft, '一键填入双平台', ['rednote', 'wechat-image'], true);
     this.handoffButton(actions, draft, '填入小红书', ['rednote']);
     this.handoffButton(actions, draft, '填入微信贴图', ['wechat-image']);
-    this.handoffButton(actions, draft, '双平台填入', ['rednote', 'wechat-image'], true);
     for (const destination of ['rednote', 'wechat-image'] as const) {
       const run = this.destinationRuns[destination];
       if (run.status === 'idle' || !run.message) continue;
@@ -448,6 +510,7 @@ export class ImagePostPublishingPanel {
     const input = document.body.createEl('input', { type: 'file' });
     input.accept = 'image/jpeg,image/png,image/webp,.heic,.heif'; input.multiple = true; input.hidden = true;
     input.onchange = () => { const files = input.files; input.remove(); void this.importFiles(files); };
+    input.oncancel = () => input.remove();
     input.click();
   }
 
@@ -461,6 +524,7 @@ export class ImagePostPublishingPanel {
       input.remove();
       if (file) void this.replaceMaterial(materialId, file);
     };
+    input.oncancel = () => input.remove();
     input.click();
   }
 
@@ -473,10 +537,8 @@ export class ImagePostPublishingPanel {
     this.error = '';
     this.deps.requestRender();
     try {
-      const sourcePath = electronWebUtils?.getPathForFile(file) || (file as File & { path?: string }).path;
-      if (!sourcePath) throw new Error(`无法读取“${file.name}”的本地路径。`);
-      const material = await this.deps.workspace.importPhoto({
-        sourcePath,
+      const material = await this.deps.workspace.importPhotoBytes({
+        bytes: new Uint8Array(await file.arrayBuffer()),
         originalName: file.name,
         ...await imageDimensions(file),
       });
@@ -503,10 +565,12 @@ export class ImagePostPublishingPanel {
       const failures: string[] = [];
       for (const file of Array.from(files)) {
         try {
-          const sourcePath = electronWebUtils?.getPathForFile(file) || (file as File & { path?: string }).path;
-          if (!sourcePath) throw new Error(`无法读取“${file.name}”的本地路径。`);
           const dimensions = await imageDimensions(file);
-          const material = await this.deps.workspace.importPhoto({ sourcePath, originalName: file.name, ...dimensions });
+          const material = await this.deps.workspace.importPhotoBytes({
+            bytes: new Uint8Array(await file.arrayBuffer()),
+            originalName: file.name,
+            ...dimensions,
+          });
           next = addImagePostMaterial(next, material);
           imported += 1;
         } catch (error) {
@@ -522,10 +586,30 @@ export class ImagePostPublishingPanel {
   }
 
   private async handoffDestinations(destinations: readonly ImagePostDestination[]): Promise<void> {
-    await Promise.all(destinations.map(destination => this.handoffDestination(destination)));
+    if (!this.draft || this.busy) return;
+    await this.flushDraftSave();
+    if (this.deps.mode === 'cards') {
+      const strictestLimit = Math.min(...destinations.map(imagePostLimit));
+      if (this.draft.selectedCardPages.length > strictestLimit) {
+        this.error = `所选图片超过平台上限 ${strictestLimit} 张，请减少后重试。`;
+        this.deps.requestRender();
+        return;
+      }
+      await this.materializeSelectedCards(destinations[0]);
+    }
+    if (!this.draft) return;
+    const prepared = new Map(destinations.map(destination => (
+      [destination, prepareImagePost(this.draft!, [destination])] as const
+    )));
+    await Promise.all(destinations.map(destination => (
+      this.handoffDestination(destination, prepared.get(destination))
+    )));
   }
 
-  private async handoffDestination(destination: ImagePostDestination): Promise<void> {
+  private async handoffDestination(
+    destination: ImagePostDestination,
+    preparedSnapshot?: ReturnType<typeof prepareImagePost>,
+  ): Promise<void> {
     if (!this.draft || this.busy || this.destinationRuns[destination].status === 'running') return;
     const abort = new AbortController();
     this.destinationRuns[destination] = {
@@ -536,9 +620,8 @@ export class ImagePostPublishingPanel {
     this.error = '';
     this.deps.requestRender();
     try {
-      if (this.deps.mode === 'cards') await this.materializeSelectedCards(destination);
       if (!this.draft) throw new Error('图卡发送快照尚未准备好。');
-      const prepared = prepareImagePost(this.draft, [destination]);
+      const prepared = preparedSnapshot ?? prepareImagePost(this.draft, [destination]);
       const results = await this.deps.workspace.handoff(prepared, {
         signal: abort.signal,
         onProgress: progress => {
@@ -605,6 +688,11 @@ export class ImagePostPublishingPanel {
     const button = parent.createEl('button', { attr: { type: 'button', title: label, 'aria-label': label } });
     setIcon(button, icon); button.disabled = disabled || this.busy; button.onclick = event => { event.stopPropagation(); action(); };
   }
+  private selectMaterial(id: string | undefined): void {
+    if (!this.draft || !id) return;
+    this.draft = setImagePostActiveMaterial(this.draft, id);
+    void this.persistAndRender();
+  }
   private moveMaterial(id: string, index: number): void { if (this.draft) { this.draft = moveImagePostMaterial(this.draft, id, index); void this.persistAndRender(); } }
   private setLead(id: string): void { if (this.draft) { this.draft = setImagePostLeadMaterial(this.draft, id); void this.persistAndRender(); } }
   private removeMaterial(id: string): void {
@@ -614,61 +702,54 @@ export class ImagePostPublishingPanel {
     this.draft = removeImagePostMaterial(this.draft, id);
     void this.persistAndRender();
   }
+  private async restoreLegacyDraft(): Promise<void> {
+    if (!this.deps.file || this.busy) return;
+    this.busy = true;
+    this.error = '';
+    try {
+      const source = {
+        articlePath: this.deps.file.path,
+        contentVersion: createHash('sha256').update('', 'utf8').digest('hex'),
+      };
+      this.draft = await this.deps.workspace.restoreLegacyPhotoDraft(source);
+      this.backupDraft = await this.deps.workspace.loadStandalonePhotoDraftBackup();
+      this.status = '旧照片草稿已复制到独立工作区，原草稿仍保留。';
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '恢复旧照片草稿失败。';
+    } finally {
+      this.busy = false;
+      if (!this.disposed) this.deps.requestRender();
+    }
+  }
+  private async restorePhotoBackup(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    this.error = '';
+    try {
+      this.draft = await this.deps.workspace.restoreStandalonePhotoDraftBackup();
+      this.status = '已恢复上次独立照片草稿。';
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '恢复照片草稿备份失败。';
+    } finally {
+      this.busy = false;
+      if (!this.disposed) this.deps.requestRender();
+    }
+  }
+  private scheduleDraftSave(): void {
+    if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
+      this.saveTimer = null;
+      void this.flushDraftSave();
+    }, 250);
+  }
+  private async flushDraftSave(): Promise<void> {
+    if (this.saveTimer !== null) {
+      window.clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    if (this.draft) await this.deps.workspace.saveDraft(this.draft);
+  }
   private async persistAndRender(): Promise<void> { if (this.draft) await this.deps.workspace.saveDraft(this.draft); if (!this.disposed) this.deps.requestRender(); }
-}
-
-class ImagePostMaterialPreviewModal extends Modal {
-  private index: number;
-
-  constructor(
-    app: App,
-    private readonly entries: readonly { material: ImagePostMaterial; url: string }[],
-    initialIndex: number,
-  ) {
-    super(app);
-    this.index = initialIndex;
-  }
-
-  onOpen(): void {
-    this.modalEl.addClass('ailu-image-post-preview-modal');
-    this.renderPreview();
-  }
-
-  onClose(): void {
-    this.contentEl.empty();
-  }
-
-  private renderPreview(): void {
-    this.contentEl.empty();
-    const entry = this.entries[this.index];
-    if (!entry) return;
-    const header = this.contentEl.createDiv({ cls: 'ailu-image-post-preview-header' });
-    header.createEl('strong', {
-      text: entry.material.kind === 'photo'
-        ? entry.material.originalName
-        : entry.material.fileName,
-    });
-    header.createSpan({
-      text: `${this.index + 1}/${this.entries.length} · ${entry.material.width}×${entry.material.height}`,
-    });
-    this.contentEl.createEl('img', {
-      cls: 'ailu-image-post-preview-large',
-      attr: { src: entry.url, alt: entry.material.fileName },
-    });
-    const navigation = this.contentEl.createDiv({ cls: 'ailu-image-post-preview-navigation' });
-    const previous = navigation.createEl('button', {
-      attr: { type: 'button', 'aria-label': '上一张图片' },
-    });
-    setIcon(previous, 'chevron-left');
-    previous.disabled = this.index === 0;
-    previous.onclick = () => { this.index -= 1; this.renderPreview(); };
-    const next = navigation.createEl('button', {
-      attr: { type: 'button', 'aria-label': '下一张图片' },
-    });
-    setIcon(next, 'chevron-right');
-    next.disabled = this.index === this.entries.length - 1;
-    next.onclick = () => { this.index += 1; this.renderPreview(); };
-  }
 }
 
 function destinationName(destination: ImagePostDestination): string {

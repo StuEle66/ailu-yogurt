@@ -10,7 +10,7 @@ const versions = JSON.parse(fs.readFileSync('versions.json', 'utf8'));
 
 const EXPECTED_PLUGIN_ID = 'ailu';
 const EXPECTED_PLUGIN_NAME = 'Ailu';
-const EXPECTED_VERSION = '0.4.1';
+const EXPECTED_VERSION = '0.5.0';
 const STORAGE_NAMESPACE = '.ailu';
 const BUILD_ATTESTATION = 'build-attestation.json';
 const DISTRIBUTION_LEGAL_FILES = [
@@ -116,15 +116,15 @@ requireCondition(
   'The entities runtime dependency and BSD-2-Clause lock metadata must remain pinned.',
 );
 requireCondition(
-  packageJson.overrides?.['js-yaml'] === '4.3.1'
+  packageJson.overrides?.['js-yaml'] === '4.3.2'
     && packageJson.overrides?.nanoid === '3.3.18'
-    && packageLock.packages?.['node_modules/js-yaml']?.version === '4.3.1'
+    && packageLock.packages?.['node_modules/js-yaml']?.version === '4.3.2'
     && packageLock.packages?.['node_modules/nanoid']?.version === '3.3.18',
   'Known-vulnerable js-yaml or nanoid versions must not re-enter the development dependency tree.',
 );
 requireCondition(versions[manifest.version] === manifest.minAppVersion, 'versions.json must map the current version to minAppVersion.');
 requireCondition(
-  Object.keys(versions).length === 5 && versions['0.2.0'] === '1.11.4' && Object.hasOwn(versions, EXPECTED_VERSION),
+  Object.keys(versions).length === 6 && versions['0.2.0'] === '1.11.4' && Object.hasOwn(versions, EXPECTED_VERSION),
   'The Ailu plugin id must retain the upstream 0.2.0 and current fork release history.',
 );
 requireCondition(typeof manifest.description === 'string' && manifest.description.length <= 250, 'Manifest description must be at most 250 characters.');

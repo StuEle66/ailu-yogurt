@@ -2,9 +2,9 @@
 
 ## 此定制仓库
 
-本仓库为 Ailu 的个人改进分支，版本 `0.4.1`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪、从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流、13 个创作 Skill 快捷入口、宽高共同适配的整卡预览、编辑刷新保页、小红书取消独立封面，以及 Codex 图片事件和重连反馈修复。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
+本仓库为 Ailu 的个人改进分支，版本 `0.5.0`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪、从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流、13 个创作 Skill 快捷入口、宽高共同适配的整卡预览、编辑刷新保页、Codex 图片事件和重连反馈修复，以及图卡／照片混排后填入小红书与微信贴图编辑器的图文工作区。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
 
-上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。当前功能分支为 `feat/rednote-publishing`。
+上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。功能开发从 `main` 创建独立的 `feat/*` 或 `fix/*` 分支。
 
 后续同步先执行 `git fetch upstream`，再用 `git log --oneline main..upstream/main` 与 `git diff main...upstream/main` 审查变化。确认同步范围后，在开发分支显式合并选定的上游提交并重新运行完整检查；不要直接重置有改动的分支。完成并验证的项目改动按根目录 `AGENTS.md` 提交并推送到 `origin`。
 
@@ -14,7 +14,7 @@
 ![Commercial use: permitted under AGPL](https://img.shields.io/badge/commercial_use-permitted_under_AGPL-2ea44f.svg)
 ![Commercial support: available](https://img.shields.io/badge/commercial_support-available-7c3aed.svg)
 
-Ailu 是一款桌面端 Obsidian 插件，把本地 Agent 对话、内容预览、公众号草稿上传、飞书文档同步和 X Article 草稿创建收进同一个简约工作台。显示名为 `Ailu`，插件 ID、包名、存储和 Agent Memory 身份统一为 `ailu`。
+Ailu 是一款桌面端 Obsidian 插件，把本地 Agent 对话、内容预览、公众号草稿上传、图文后台填充、飞书文档同步和 X Article 草稿创建收进同一个简约工作台。显示名为 `Ailu`，插件 ID、包名、存储和 Agent Memory 身份统一为 `ailu`。
 
 ## 当前分发状态
 
@@ -100,6 +100,12 @@ npm run deploy:apply -- --vault "/Users/你的用户名/Documents/My Vault"
 4. 可选的 Agent Memory Runtime v2 安装与 `memoryctl --actor ailu version --json` 握手。
 
 四条集成互不替代，也不应在第一次启动时一起排错。完整指南为每一步给出了成功信号、凭据边界和失败后的处理顺序。
+
+### 图文后台填充
+
+创作台的「图文」页可以把当前 Markdown 渲染成 3:4 图卡，也可以选择或拖入 JPEG、PNG、WebP 照片。素材会复制到 `~/.ailu/image-post/`，草稿只保存受管路径、哈希、排序、首图和文案元数据；移除素材不会删除原图。
+
+点击「填入所选后台」后，Ailu 使用 `~/.ailu/browser-profiles/image-post/` 中的专用 Chrome 登录态，分别打开小红书图文编辑器和微信公众号图片消息编辑器，上传冻结的图片顺序并填写标题、文案和话题。第一次使用需在该 Chrome 窗口中分别登录。Ailu 会停在可检查的编辑页，不提供最终发布动作；验证码、登录失效、页面变化或上传开始后的中断会保留现场并要求人工核对。
 
 ### 更新
 

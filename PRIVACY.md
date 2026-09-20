@@ -10,6 +10,7 @@ Ailu is local-first, but it coordinates tools that can use network services. Thi
 - X cookies in `~/.ailu/secrets/x/cookies.json`;
 - content-addressed image attachment copies in `~/.ailu/frozen-attachments/`, created from already verified Vault bytes before an Agent turn and protected by private directory/file permissions;
 - runtime caches and bounded logs under `~/.ailu/`;
+- recoverable image-post draft metadata, managed photo/card copies, and a dedicated Chrome profile under `~/.ailu/image-post/` and `~/.ailu/browser-profiles/image-post/`;
 - Feishu authorization metadata without the CLI's credentials;
 - frontmatter links and hashes needed to update previously created drafts/documents.
 
@@ -21,6 +22,7 @@ Ailu does not automatically write ordinary chat history into shared Agent Memory
 - Chat, Feishu, and X previews do not let MarkdownRenderer load remote media or arbitrary local paths. Verified frozen bytes use short-lived managed `blob:` URLs; unresolved media becomes a local placeholder. Only the WeChat snapshot path may fetch a remote note image, and it restricts the request to HTTPS port 443, revalidates every public DNS/redirect target, bounds the response, and verifies the media type before preview or upload preparation.
 - Feishu content is sent only after the user confirms a create or sync operation, through the independently authenticated `lark-cli`.
 - X content and verified local media are sent only after the user confirms draft creation. The uploader controls a separate browser session and does not click Publish.
+- Image-post photos/cards, titles, copy, and topics are sent only when the user clicks the handoff action. Ailu fills dedicated-Chrome Xiaohongshu and WeChat image-message editors, leaves both pages open for review, and has no final-publish action.
 - WeChat article HTML, cover, and body images are sent only after confirmation to the user's self-hosted `wechat-relay`, which then calls the official WeChat API.
 - Local template rendering and preview do not require an Ailu service or account.
 

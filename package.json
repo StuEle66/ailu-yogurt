@@ -1,6 +1,6 @@
 {
   "name": "ailu",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "description": "Local Agent chat and content publishing studio for Obsidian.",
   "type": "module",
@@ -49,7 +49,7 @@
     "obsidian": "^1.8.7",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.48.0",
-    "vitest": "^4.0.14"
+    "vitest": "4.1.11"
   },
   "dependencies": {
     "@fontsource/ma-shan-zheng": "5.2.6",
@@ -59,7 +59,7 @@
     "qrcode": "^1.5.4"
   },
   "overrides": {
-    "js-yaml": "4.3.1",
+    "js-yaml": "4.3.2",
     "nanoid": "3.3.18"
   }
 }

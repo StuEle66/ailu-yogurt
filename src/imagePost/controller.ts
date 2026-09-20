@@ -65,8 +65,8 @@ export class ImagePostWorkspaceController {
     return this.assets.importRenderedCard(input);
   }
 
-  handoff(prepared: PreparedImagePost) {
-    return handoffPreparedImagePost(prepared, this.coordinator);
+  handoff(prepared: PreparedImagePost, signal?: AbortSignal) {
+    return handoffPreparedImagePost(prepared, this.coordinator, signal);
   }
 }
 

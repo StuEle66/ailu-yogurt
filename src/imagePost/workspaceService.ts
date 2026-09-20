@@ -9,12 +9,14 @@ export interface ImagePostHandoffCoordinatorLike {
   handoff(
     post: ImagePostAdapterInput,
     destinations: readonly AdapterDestination[],
+    options?: { readonly signal?: AbortSignal },
   ): Promise<ImagePostHandoffSnapshot>;
 }
 
 export async function handoffPreparedImagePost(
   prepared: PreparedImagePost,
   coordinator: ImagePostHandoffCoordinatorLike,
+  signal?: AbortSignal,
 ): Promise<Readonly<Partial<Record<ImagePostDestination, ImagePostHandoffSnapshot>>>> {
   const results: Partial<Record<ImagePostDestination, ImagePostHandoffSnapshot>> = {};
   for (const destination of prepared.destinations) {
@@ -30,7 +32,7 @@ export async function handoffPreparedImagePost(
         path: material.managedPath,
       })),
     };
-    results[destination] = await coordinator.handoff(input, [destination]);
+    results[destination] = await coordinator.handoff(input, [destination], { signal });
   }
   return Object.freeze(results);
 }

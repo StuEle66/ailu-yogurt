@@ -36,6 +36,14 @@ interface ImagePostPublishingPanelDeps {
   openSettings: () => void;
 }
 
+interface ElectronWebUtils {
+  getPathForFile(file: File): string;
+}
+
+const electronWebUtils = (window as unknown as {
+  require?: (moduleId: 'electron') => { webUtils?: ElectronWebUtils };
+}).require?.('electron').webUtils;
+
 export class ImagePostPublishingPanel {
   private readonly cards: RedNotePublishingPanel | null;
   private draft: ImagePostDraft | null = null;
@@ -46,6 +54,7 @@ export class ImagePostPublishingPanel {
   private includeRedNote = true;
   private includeWechat = true;
   private disposed = false;
+  private handoffAbort: AbortController | null = null;
 
   constructor(private readonly deps: ImagePostPublishingPanelDeps) {
     this.cards = deps.file ? new RedNotePublishingPanel({
@@ -200,6 +209,10 @@ export class ImagePostPublishingPanel {
     const handoff = footer.createEl('button', { cls: 'mod-cta', text: '填入所选后台', attr: { type: 'button' } });
     handoff.disabled = this.busy || !draft.materials.length || (!this.includeRedNote && !this.includeWechat);
     handoff.onclick = () => void this.handoff();
+    if (this.handoffAbort) {
+      const stop = footer.createEl('button', { text: '停止填写', attr: { type: 'button' } });
+      stop.onclick = () => this.handoffAbort?.abort();
+    }
   }
 
   private destinationToggle(parent: HTMLElement, label: string, checked: boolean, change: (value: boolean) => void): void {
@@ -221,7 +234,7 @@ export class ImagePostPublishingPanel {
     try {
       let next = this.draft;
       for (const file of Array.from(files)) {
-        const sourcePath = (file as File & { path?: string }).path;
+        const sourcePath = electronWebUtils?.getPathForFile(file) || (file as File & { path?: string }).path;
         if (!sourcePath) throw new Error(`无法读取“${file.name}”的本地路径。`);
         const dimensions = await imageDimensions(file);
         const material = await this.deps.workspace.importPhoto({ sourcePath, originalName: file.name, ...dimensions });
@@ -263,14 +276,15 @@ export class ImagePostPublishingPanel {
     if (this.includeRedNote) destinations.push('rednote');
     if (this.includeWechat) destinations.push('wechat-image');
     this.busy = true; this.status = '正在打开专用 Chrome 并填入内容…'; this.error = ''; this.deps.requestRender();
+    this.handoffAbort = new AbortController();
     try {
       const prepared = prepareImagePost(this.draft, destinations);
-      const results = await this.deps.workspace.handoff(prepared);
+      const results = await this.deps.workspace.handoff(prepared, this.handoffAbort.signal);
       const outcomes = Object.values(results).flatMap(result => Object.values(result.outcomes));
       this.status = outcomes.map(outcome => outcome?.message).filter(Boolean).join('；') || '后台填写已完成，请在 Chrome 中检查。';
       new Notice(this.status, 10_000);
     } catch (error) { this.error = error instanceof Error ? error.message : '图文后台填写失败。'; new Notice(this.error, 10_000); }
-    finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
+    finally { this.handoffAbort = null; this.busy = false; if (!this.disposed) this.deps.requestRender(); }
   }
 
   private materialButton(parent: HTMLElement, icon: string, label: string, action: () => void, disabled = false): void {

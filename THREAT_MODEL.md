@@ -19,6 +19,7 @@ Ailu is a local Obsidian plugin that orchestrates user-installed Claude Code or 
 4. **Feishu.** Ailu invokes an independently installed `lark-cli`; authentication remains owned by that CLI. Only user-confirmed document operations are in scope.
 5. **X.** The uploader uses a separate Playwright profile and canonical X cookies. It creates a draft but never clicks final publish.
 6. **WeChat relay.** Article HTML and images leave the Mac only after confirmation and travel to the user's own `wechat-relay`. The AppSecret stays on that server. Ailu does not offer a shared relay.
+7. **Image-post browser handoff.** A dedicated Chrome profile stores Xiaohongshu and WeChat web login state. Ailu can upload the frozen image set and fill copy after an explicit handoff, but it exposes no final-publish operation and preserves uncertain pages for inspection.
 
 ## Principal controls
 
@@ -40,6 +41,7 @@ Ailu is a local Obsidian plugin that orchestrates user-installed Claude Code or 
 - a compromised user account, OS, Obsidian process, Agent CLI, local Skill, browser profile, or self-hosted relay can access data available to that component;
 - model providers may receive prompts or attachments according to their CLI configuration;
 - browser and platform UI changes can break draft automation, producing a partial draft that requires manual inspection;
+- Xiaohongshu or WeChat image-editor changes can leave a partially filled page; after upload begins, interruption is treated as uncertain and is never blindly replayed;
 - X and WeChat may retain uploaded drafts independently of local rollback;
 - advisory same-user locks prevent accidental concurrency, not a malicious process running as the same user;
 - no security claim is made for Windows writer or child-process-tree behavior; runtime execution and unsupported writer paths fail closed before spawning.

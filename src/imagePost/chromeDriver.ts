@@ -49,11 +49,28 @@ const PROFILES: Readonly<Record<ImagePostDestination, BrowserProfile>> = Object.
   }),
 });
 
-export const WECHAT_IMAGE_COMPOSER_LABELS = Object.freeze(['贴图', '图片/文字', '图片消息', '小绿书']);
-export const WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR = 'a,button,[role="button"],.new-creation__menu-item';
-
 export function imagePostBrowserProfile(destination: ImagePostDestination): BrowserProfile {
   return PROFILES[destination];
+}
+
+export function buildWechatImageComposerUrl(homeUrl: string): string | null {
+  try {
+    const source = new URL(homeUrl);
+    if (source.hostname !== 'mp.weixin.qq.com' || !source.pathname.startsWith('/cgi-bin/')) return null;
+    const token = source.searchParams.get('token');
+    if (!token) return null;
+    const composer = new URL('https://mp.weixin.qq.com/cgi-bin/appmsg');
+    composer.searchParams.set('t', 'media/appmsg_edit_v2');
+    composer.searchParams.set('action', 'edit');
+    composer.searchParams.set('isNew', '1');
+    composer.searchParams.set('type', '77');
+    composer.searchParams.set('createType', '8');
+    composer.searchParams.set('token', token);
+    composer.searchParams.set('lang', source.searchParams.get('lang') || 'zh_CN');
+    return composer.toString();
+  } catch {
+    return null;
+  }
 }
 
 export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
@@ -171,40 +188,13 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     } catch {
       throw new Error('微信贴图后台返回了无法识别的页面地址。');
     }
-    const readPoint = (): Promise<{ x: number; y: number } | null> => this.evaluate(`(async () => {
-      const wanted = ${JSON.stringify(WECHAT_IMAGE_COMPOSER_LABELS)};
-      const element = [...document.querySelectorAll(${JSON.stringify(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR)})]
-        .find(node => wanted.some(label => (node.textContent || '').trim().includes(label)));
-      if (!(element instanceof HTMLElement)) return null;
-      element.scrollIntoView({ block: 'center', inline: 'center' });
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const rect = element.getBoundingClientRect();
-      const viewportWidth = window.visualViewport?.width || window.innerWidth;
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
-      if (rect.width <= 0 || rect.height <= 0
-        || rect.right <= 0 || rect.bottom <= 0
-        || rect.left >= viewportWidth || rect.top >= viewportHeight) return null;
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-    })()`);
-    const point = await waitForWechatImageComposerEntryPoint(
-      readPoint,
-      async () => delay(500, signal),
-    );
-    if (!point) return;
-    const session = this.requireSession();
-    await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
-    await session.send('Input.dispatchMouseEvent', {
-      type: 'mousePressed', button: 'left', clickCount: 1, ...point,
-    });
-    await session.send('Input.dispatchMouseEvent', {
-      type: 'mouseReleased', button: 'left', clickCount: 1, ...point,
-    });
-    const composer = await this.chrome.waitForWechatImageComposer(signal);
-    if (composer) {
-      this.session = composer;
-      await composer.send('Page.enable');
-      await delay(500, signal);
-    }
+    const composerUrl = buildWechatImageComposerUrl(snapshot.url);
+    if (!composerUrl) return;
+    const composer = await this.chrome.openPage(composerUrl, signal);
+    this.session?.close();
+    this.session = composer;
+    await composer.send('Page.enable');
+    await delay(500, signal);
   }
 
   private async fillField(selectors: readonly string[], value: string, signal: AbortSignal): Promise<void> {
@@ -342,19 +332,6 @@ export async function waitForStableUploadedImageCount(
   return false;
 }
 
-export async function waitForWechatImageComposerEntryPoint(
-  readPoint: () => Promise<{ x: number; y: number } | null>,
-  wait: () => Promise<void>,
-  attempts = 20,
-): Promise<{ x: number; y: number } | null> {
-  let point = await readPoint();
-  for (let attempt = 1; !point && attempt < attempts; attempt += 1) {
-    await wait();
-    point = await readPoint();
-  }
-  return point;
-}
-
 export class DedicatedChromeController {
   private endpoint = '';
   private endpointPromise: Promise<void> | null = null;
@@ -447,6 +424,7 @@ export function selectExistingImagePostTarget(
   requestedUrl: string,
 ): { webSocketDebuggerUrl: string } | null {
   const requested = new URL(requestedUrl);
+  const requestedWechatComposer = isWechatImageComposerUrl(requested);
   const candidates = targets.flatMap((target, index) => {
     if (target.type !== 'page' || !target.url || !target.webSocketDebuggerUrl) return [];
     try {
@@ -459,6 +437,7 @@ export function selectExistingImagePostTarget(
         && current.pathname.startsWith('/cgi-bin/');
       const wechatImageComposer = requested.hostname === 'mp.weixin.qq.com'
         && isWechatImageComposerUrl(current);
+      if (requestedWechatComposer && !wechatImageComposer) return [];
       return [{ target, index, score: wechatImageComposer ? 200 : authenticatedWechat ? 100 : 0 }];
     } catch { return []; }
   });

@@ -8,18 +8,16 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildWechatImageComposerUrl,
   classifyImagePostComposerSnapshot,
   CdpSession,
   DedicatedChromeController,
   imagePostBrowserProfile,
   selectWechatImageComposerTarget,
   selectExistingImagePostTarget,
-  waitForWechatImageComposerEntryPoint,
   waitForImagePostComposerState,
   waitForStableUploadedImageCount,
   waitForUploadedImageCount,
-  WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR,
-  WECHAT_IMAGE_COMPOSER_LABELS,
 } from '../src/imagePost/chromeDriver';
 
 afterEach(() => {
@@ -27,19 +25,13 @@ afterEach(() => {
 });
 
 describe('image post Chrome driver', () => {
-  it('waits for the asynchronously rendered WeChat image-post entry', async () => {
-    const readPoint = vi.fn()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ x: 120, y: 240 });
-    const wait = vi.fn().mockResolvedValue(undefined);
-
-    await expect(waitForWechatImageComposerEntryPoint(readPoint, wait, 4)).resolves.toEqual({
-      x: 120,
-      y: 240,
-    });
-    expect(readPoint).toHaveBeenCalledTimes(3);
-    expect(wait).toHaveBeenCalledTimes(2);
+  it('opens the authenticated WeChat image composer directly from the home-page token', () => {
+    expect(buildWechatImageComposerUrl(
+      'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&lang=zh_CN&token=test-token',
+    )).toBe(
+      'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media%2Fappmsg_edit_v2&action=edit&isNew=1&type=77&createType=8&token=test-token&lang=zh_CN',
+    );
+    expect(buildWechatImageComposerUrl('https://mp.weixin.qq.com/')).toBeNull();
   });
 
   it('uploads image paths one at a time and reports deterministic progress', () => {
@@ -240,23 +232,23 @@ describe('image post Chrome driver', () => {
     });
   });
 
-  it('recognizes the current WeChat image-post entry label', () => {
-    expect(WECHAT_IMAGE_COMPOSER_LABELS).toContain('贴图');
-    expect(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR).toContain('.new-creation__menu-item');
-    const source = fs.readFileSync(
-      fileURLToPath(new URL('../src/imagePost/chromeDriver.ts', import.meta.url)),
-      'utf8',
-    );
-    expect(source).toContain("'Input.dispatchMouseEvent'");
+  it('does not reuse the WeChat home page when the image composer URL is requested', () => {
+    expect(selectExistingImagePostTarget([
+      {
+        type: 'page',
+        url: 'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&token=test',
+        webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/home',
+      },
+    ], 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&type=77&token=test')).toBeNull();
   });
 
-  it('scrolls an off-screen WeChat image-post entry into view before the trusted click', () => {
+  it('opens the current WeChat image-post editor without relying on a pointer click', () => {
     const source = fs.readFileSync(
       fileURLToPath(new URL('../src/imagePost/chromeDriver.ts', import.meta.url)),
       'utf8',
     );
-    expect(source).toContain("element.scrollIntoView({ block: 'center', inline: 'center' })");
-    expect(source).toContain('requestAnimationFrame');
+    expect(source).toContain('buildWechatImageComposerUrl(snapshot.url)');
+    expect(source).not.toContain("'Input.dispatchMouseEvent'");
   });
 
   it('treats the WeChat description placeholder as an empty composer', () => {

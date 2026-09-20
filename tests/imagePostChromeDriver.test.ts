@@ -154,6 +154,7 @@ describe('image post Chrome driver', () => {
   it('targets the WeChat image-post uploader and description editor instead of article controls', () => {
     const profile = imagePostBrowserProfile('wechat-image');
     expect(profile.fileInputSelector).toBe('.js_upload_btn_container input[type="file"]');
+    expect(profile.titleSelectors[0]).toBe('[data-placeholder*="标题"].ProseMirror[contenteditable="true"]');
     expect(profile.bodySelectors[0]).toBe('.share-text__input .ProseMirror');
     expect(profile.uploadedImageSelector).toBe('.image-selector__bottom-list-item');
   });

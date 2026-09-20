@@ -33,7 +33,12 @@ const PROFILES: Readonly<Record<ImagePostDestination, BrowserProfile>> = Object.
     editorUrl: 'https://mp.weixin.qq.com/',
     fileInputSelector: '.js_upload_btn_container input[type="file"]',
     uploadedImageSelector: '.image-selector__bottom-list-item',
-    titleSelectors: Object.freeze(['input[placeholder*="标题"]', 'textarea[placeholder*="标题"]', '#title']),
+    titleSelectors: Object.freeze([
+      '[data-placeholder*="标题"].ProseMirror[contenteditable="true"]',
+      'input[placeholder*="标题"]',
+      'textarea[placeholder*="标题"]',
+      '#title',
+    ]),
     bodySelectors: Object.freeze([
       '.share-text__input .ProseMirror',
       'textarea[placeholder*="描述"]',

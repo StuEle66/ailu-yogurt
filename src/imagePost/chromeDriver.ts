@@ -152,12 +152,19 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     } catch {
       throw new Error('微信贴图后台返回了无法识别的页面地址。');
     }
-    const point = await this.evaluate<{ x: number; y: number } | null>(`(() => {
+    const point = await this.evaluate<{ x: number; y: number } | null>(`(async () => {
       const wanted = ${JSON.stringify(WECHAT_IMAGE_COMPOSER_LABELS)};
       const element = [...document.querySelectorAll(${JSON.stringify(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR)})]
         .find(node => wanted.some(label => (node.textContent || '').trim().includes(label)));
       if (!(element instanceof HTMLElement)) return null;
+      element.scrollIntoView({ block: 'center', inline: 'center' });
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const rect = element.getBoundingClientRect();
+      const viewportWidth = window.visualViewport?.width || window.innerWidth;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      if (rect.width <= 0 || rect.height <= 0
+        || rect.right <= 0 || rect.bottom <= 0
+        || rect.left >= viewportWidth || rect.top >= viewportHeight) return null;
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);
     if (!point) return;

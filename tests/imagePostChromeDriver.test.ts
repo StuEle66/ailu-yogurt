@@ -187,6 +187,15 @@ describe('image post Chrome driver', () => {
     expect(source).toContain("'Input.dispatchMouseEvent'");
   });
 
+  it('scrolls an off-screen WeChat image-post entry into view before the trusted click', () => {
+    const source = fs.readFileSync(
+      fileURLToPath(new URL('../src/imagePost/chromeDriver.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toContain("element.scrollIntoView({ block: 'center', inline: 'center' })");
+    expect(source).toContain('requestAnimationFrame');
+  });
+
   it('treats the WeChat description placeholder as an empty composer', () => {
     expect(classifyImagePostComposerSnapshot({
       url: 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit_v2&type=77',

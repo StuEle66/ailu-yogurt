@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
-import type { ImagePostCardMaterial, ImagePostPhotoMaterial } from './index';
+import type {
+  ImagePostCardMaterial,
+  ImagePostMaterial,
+  ImagePostPhotoMaterial,
+} from './index';
 
 export interface ManagedAssetFileSystem {
   mkdir(path: string): Promise<void>;
@@ -98,6 +102,30 @@ export class ManagedImagePostAssetStore {
       mimeType: 'image/png',
       renderedPage: input.page,
     };
+  }
+
+  async readMaterial(material: ImagePostMaterial): Promise<Uint8Array> {
+    const managedPath = this.resolveManagedPath(material.managedPath);
+    let bytes: Uint8Array;
+    try {
+      bytes = await this.fileSystem.readFile(managedPath);
+    } catch {
+      throw new Error(`图文素材“${material.fileName}”文件不存在或无法读取，请移除后重新选择。`);
+    }
+    const contentHash = createHash('sha256').update(bytes).digest('hex');
+    if (contentHash !== material.contentHash) {
+      throw new Error(`图文素材“${material.fileName}”内容已变化，请移除后重新选择。`);
+    }
+    assertPhotoSignature(bytes, material.mimeType);
+    return bytes.slice();
+  }
+
+  private resolveManagedPath(materialPath: string): string {
+    const managedPath = path.resolve(materialPath);
+    if (path.dirname(managedPath) !== this.rootDirectory) {
+      throw new Error('图文素材不在 Ailu 受管目录内，已拒绝读取。');
+    }
+    return managedPath;
   }
 }
 

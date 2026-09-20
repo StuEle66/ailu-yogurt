@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, test } from 'vitest';
 
 import {
   ManagedImagePostAssetStore,
+  ManagedImagePostPreviewStore,
   type ManagedAssetFileSystem,
 } from '../src/imagePost';
 
@@ -26,6 +29,142 @@ class MemoryFileSystem implements ManagedAssetFileSystem {
 }
 
 describe('managed image post assets', () => {
+  test('reads a validated managed material as bytes for preview and upload', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const bytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01,
+    ]);
+    const managedPath = '/vault/.ailu/image-posts/assets/photo-a.png';
+    fileSystem.files.set(managedPath, bytes);
+    const store = new ManagedImagePostAssetStore({
+      rootDirectory: '/vault/.ailu/image-posts/assets',
+      fileSystem,
+      createId: () => 'unused',
+    });
+
+    await expect(store.readMaterial({
+      id: 'photo-a',
+      kind: 'photo',
+      fileName: 'photo-a.png',
+      originalName: '旅行照片.png',
+      contentHash: createHash('sha256').update(bytes).digest('hex'),
+      width: 1200,
+      height: 1600,
+      managedPath,
+      mimeType: 'image/png',
+    })).resolves.toEqual(bytes);
+  });
+
+  test('reports missing managed material without exposing a broken file URL', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const store = new ManagedImagePostAssetStore({
+      rootDirectory: '/vault/.ailu/image-posts/assets',
+      fileSystem,
+      createId: () => 'unused',
+    });
+
+    await expect(store.readMaterial({
+      id: 'missing',
+      kind: 'photo',
+      fileName: 'missing.png',
+      originalName: '找不到.png',
+      contentHash: 'a'.repeat(64),
+      width: 1200,
+      height: 1600,
+      managedPath: '/vault/.ailu/image-posts/assets/missing.png',
+      mimeType: 'image/png',
+    })).rejects.toThrow('文件不存在');
+  });
+
+  test('rejects paths outside the managed directory before reading them', async () => {
+    const fileSystem = new MemoryFileSystem();
+    fileSystem.files.set('/private/secret.png', Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]));
+    const store = new ManagedImagePostAssetStore({
+      rootDirectory: '/vault/.ailu/image-posts/assets',
+      fileSystem,
+      createId: () => 'unused',
+    });
+
+    await expect(store.readMaterial({
+      id: 'escaped',
+      kind: 'photo',
+      fileName: 'secret.png',
+      originalName: 'secret.png',
+      contentHash: 'a'.repeat(64),
+      width: 1200,
+      height: 1600,
+      managedPath: '/private/secret.png',
+      mimeType: 'image/png',
+    })).rejects.toThrow('不在 Ailu 受管目录内');
+  });
+
+  test('rejects hash mismatches and disguised image formats', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pngBytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01,
+    ]);
+    const managedPath = '/vault/.ailu/image-posts/assets/photo-a.png';
+    fileSystem.files.set(managedPath, pngBytes);
+    const store = new ManagedImagePostAssetStore({
+      rootDirectory: '/vault/.ailu/image-posts/assets',
+      fileSystem,
+      createId: () => 'unused',
+    });
+    const base = {
+      id: 'photo-a',
+      kind: 'photo' as const,
+      fileName: 'photo-a.png',
+      originalName: '照片.png',
+      width: 1200,
+      height: 1600,
+      managedPath,
+      mimeType: 'image/png' as const,
+    };
+
+    await expect(store.readMaterial({ ...base, contentHash: 'b'.repeat(64) }))
+      .rejects.toThrow('内容已变化');
+    await expect(store.readMaterial({
+      ...base,
+      contentHash: createHash('sha256').update(pngBytes).digest('hex'),
+      mimeType: 'image/jpeg',
+    })).rejects.toThrow('图片内容与文件格式不一致');
+  });
+
+  test('caches blob previews by material hash and revokes them when no longer used', async () => {
+    const revoked: string[] = [];
+    let sequence = 0;
+    const bytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    const material = {
+      id: 'photo-a',
+      kind: 'photo' as const,
+      fileName: 'photo-a.png',
+      originalName: '照片.png',
+      contentHash: 'a'.repeat(64),
+      width: 1200,
+      height: 1600,
+      managedPath: '/vault/.ailu/image-posts/assets/photo-a.png',
+      mimeType: 'image/png' as const,
+    };
+    const previews = new ManagedImagePostPreviewStore({
+      readMaterial: async () => bytes,
+      createUrl: () => `blob:managed-${++sequence}`,
+      revokeUrl: url => revoked.push(url),
+    });
+
+    await expect(previews.load(material)).resolves.toBe('blob:managed-1');
+    await expect(previews.load(material)).resolves.toBe('blob:managed-1');
+    await expect(previews.load({ ...material, contentHash: 'b'.repeat(64) }))
+      .resolves.toBe('blob:managed-2');
+    expect(revoked).toEqual(['blob:managed-1']);
+
+    previews.retain([]);
+    expect(revoked).toEqual(['blob:managed-1', 'blob:managed-2']);
+  });
+
   test('copies same-named photos into distinct managed paths without changing their sources', async () => {
     const fileSystem = new MemoryFileSystem();
     const firstBytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x01]);

@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
 
-import { Notice, setIcon, type App, type TFile } from 'obsidian';
+import { Modal, Notice, setIcon, type App, type TFile } from 'obsidian';
 
 import {
   addImagePostMaterial,
+  ManagedImagePostPreviewStore,
   moveImagePostMaterial,
   prepareImagePost,
   removeImagePostMaterial,
@@ -44,8 +44,17 @@ const electronWebUtils = (window as unknown as {
   require?: (moduleId: 'electron') => { webUtils?: ElectronWebUtils };
 }).require?.('electron').webUtils;
 
+interface MaterialPreviewState {
+  contentHash: string;
+  status: 'loading' | 'ready' | 'error';
+  url: string | null;
+  message: string;
+}
+
 export class ImagePostPublishingPanel {
   private readonly cards: RedNotePublishingPanel | null;
+  private readonly previewStore: ManagedImagePostPreviewStore;
+  private readonly materialPreviews = new Map<string, MaterialPreviewState>();
   private draft: ImagePostDraft | null = null;
   private loading = false;
   private busy = false;
@@ -57,6 +66,9 @@ export class ImagePostPublishingPanel {
   private handoffAbort: AbortController | null = null;
 
   constructor(private readonly deps: ImagePostPublishingPanelDeps) {
+    this.previewStore = new ManagedImagePostPreviewStore({
+      readMaterial: material => deps.workspace.readMaterialBytes(material),
+    });
     this.cards = deps.file ? new RedNotePublishingPanel({
       app: deps.app,
       file: deps.file,
@@ -78,7 +90,12 @@ export class ImagePostPublishingPanel {
     if (!this.draft && !this.loading) void this.load();
   }
   refresh(): Promise<void> { return this.cards?.refresh() ?? Promise.resolve(); }
-  dispose(): void { this.disposed = true; this.cards?.dispose(); }
+  dispose(): void {
+    this.disposed = true;
+    this.previewStore.dispose();
+    this.materialPreviews.clear();
+    this.cards?.dispose();
+  }
 
   async render(parent: HTMLElement): Promise<void> {
     if (!this.draft && !this.loading) void this.load();
@@ -146,10 +163,38 @@ export class ImagePostPublishingPanel {
   }
 
   private renderMaterials(parent: HTMLElement, draft: ImagePostDraft): void {
+    this.previewStore.retain(draft.materials);
+    const activeIds = new Set(draft.materials.map(material => material.id));
+    for (const id of this.materialPreviews.keys()) {
+      if (!activeIds.has(id)) this.materialPreviews.delete(id);
+    }
     const list = parent.createDiv({ cls: 'ailu-image-post-materials' });
     draft.materials.forEach((material, index) => {
       const item = list.createDiv({ cls: material.id === draft.leadMaterialId ? 'ailu-image-post-material is-lead' : 'ailu-image-post-material' });
-      item.createEl('img', { attr: { src: pathToFileURL(material.managedPath).href, alt: material.fileName } });
+      const preview = this.materialPreviews.get(material.id);
+      if (!preview || preview.contentHash !== material.contentHash) {
+        this.loadMaterialPreview(material);
+        item.createDiv({ cls: 'ailu-image-post-material-placeholder', text: '正在读取图片…' });
+      } else if (preview.status === 'ready' && preview.url) {
+        const open = item.createEl('button', {
+          cls: 'ailu-image-post-material-preview',
+          attr: { type: 'button', 'aria-label': `查看大图：${material.fileName}` },
+        });
+        open.createEl('img', { attr: { src: preview.url, alt: material.fileName } });
+        open.onclick = () => this.openMaterialPreview(draft, material.id);
+      } else if (preview.status === 'error') {
+        const failure = item.createDiv({ cls: 'ailu-image-post-material-error' });
+        setIcon(failure.createSpan(), 'image-off');
+        failure.createEl('strong', { text: '图片无法读取' });
+        failure.createSpan({ text: preview.message });
+        const recovery = failure.createDiv({ cls: 'ailu-image-post-material-recovery' });
+        const remove = recovery.createEl('button', { text: '移除', attr: { type: 'button' } });
+        remove.onclick = () => this.removeMaterial(material.id);
+        const replace = recovery.createEl('button', { text: '重新选择', attr: { type: 'button' } });
+        replace.onclick = () => void this.chooseReplacement(material.id);
+      } else {
+        item.createDiv({ cls: 'ailu-image-post-material-placeholder', text: '正在读取图片…' });
+      }
       const meta = item.createDiv({ cls: 'ailu-image-post-material-meta' });
       meta.createEl('strong', { text: material.kind === 'card' ? `图卡 ${material.renderedPage}` : material.originalName });
       meta.createSpan({ text: `${index + 1} · ${material.width}×${material.height}` });
@@ -159,6 +204,43 @@ export class ImagePostPublishingPanel {
       this.materialButton(actions, 'star', '设为首图', () => this.setLead(material.id), material.id === draft.leadMaterialId);
       this.materialButton(actions, 'x', '移除', () => this.removeMaterial(material.id));
     });
+  }
+
+  private loadMaterialPreview(material: ImagePostMaterial): void {
+    const current = this.materialPreviews.get(material.id);
+    if (current?.contentHash === material.contentHash) return;
+    this.materialPreviews.set(material.id, {
+      contentHash: material.contentHash,
+      status: 'loading',
+      url: null,
+      message: '',
+    });
+    void this.previewStore.load(material).then(url => {
+      const active = this.materialPreviews.get(material.id);
+      if (!active || active.contentHash !== material.contentHash) return;
+      this.materialPreviews.set(material.id, { ...active, status: 'ready', url });
+      if (!this.disposed) this.deps.requestRender();
+    }).catch(error => {
+      const active = this.materialPreviews.get(material.id);
+      if (!active || active.contentHash !== material.contentHash) return;
+      this.materialPreviews.set(material.id, {
+        ...active,
+        status: 'error',
+        message: error instanceof Error ? error.message : '图片文件无法读取。',
+      });
+      if (!this.disposed) this.deps.requestRender();
+    });
+  }
+
+  private openMaterialPreview(draft: ImagePostDraft, materialId: string): void {
+    const materials = draft.materials.flatMap(material => {
+      const preview = this.materialPreviews.get(material.id);
+      return preview?.status === 'ready' && preview.url
+        ? [{ material, url: preview.url }]
+        : [];
+    });
+    const index = materials.findIndex(entry => entry.material.id === materialId);
+    if (index >= 0) new ImagePostMaterialPreviewModal(this.deps.app, materials, index).open();
   }
 
   private renderCopyEditor(parent: HTMLElement, draft: ImagePostDraft): void {
@@ -228,6 +310,57 @@ export class ImagePostPublishingPanel {
     input.click();
   }
 
+  private async chooseReplacement(materialId: string): Promise<void> {
+    if (!this.draft || this.busy) return;
+    const input = document.body.createEl('input', { type: 'file' });
+    input.accept = 'image/jpeg,image/png,image/webp,.heic,.heif';
+    input.hidden = true;
+    input.onchange = () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (file) void this.replaceMaterial(materialId, file);
+    };
+    input.click();
+  }
+
+  private async replaceMaterial(materialId: string, file: File): Promise<void> {
+    if (!this.draft || this.busy) return;
+    const index = this.draft.materials.findIndex(material => material.id === materialId);
+    if (index < 0) return;
+    this.busy = true;
+    this.status = '正在重新选择图文素材…';
+    this.error = '';
+    this.deps.requestRender();
+    try {
+      const sourcePath = electronWebUtils?.getPathForFile(file) || (file as File & { path?: string }).path;
+      if (!sourcePath) throw new Error(`无法读取“${file.name}”的本地路径。`);
+      const material = await this.deps.workspace.importPhoto({
+        sourcePath,
+        originalName: file.name,
+        ...await imageDimensions(file),
+      });
+      const materials = [...this.draft.materials];
+      materials[index] = material;
+      const next = {
+        ...this.draft,
+        materials,
+        leadMaterialId: this.draft.leadMaterialId === materialId
+          ? material.id
+          : this.draft.leadMaterialId,
+      };
+      this.previewStore.release(materialId);
+      this.materialPreviews.delete(materialId);
+      this.draft = next;
+      await this.deps.workspace.saveDraft(next);
+      this.status = '已替换无法读取的素材。';
+    } catch (error) {
+      this.error = error instanceof Error ? error.message : '重新选择图片失败。';
+    } finally {
+      this.busy = false;
+      if (!this.disposed) this.deps.requestRender();
+    }
+  }
+
   private async importFiles(files: FileList | null): Promise<void> {
     if (!files?.length || !this.draft || this.busy) return;
     this.busy = true; this.status = '正在复制照片到 .ailu 受管目录…'; this.error = ''; this.deps.requestRender();
@@ -293,8 +426,68 @@ export class ImagePostPublishingPanel {
   }
   private moveMaterial(id: string, index: number): void { if (this.draft) { this.draft = moveImagePostMaterial(this.draft, id, index); void this.persistAndRender(); } }
   private setLead(id: string): void { if (this.draft) { this.draft = setImagePostLeadMaterial(this.draft, id); void this.persistAndRender(); } }
-  private removeMaterial(id: string): void { if (this.draft) { this.draft = removeImagePostMaterial(this.draft, id); void this.persistAndRender(); } }
+  private removeMaterial(id: string): void {
+    if (!this.draft) return;
+    this.previewStore.release(id);
+    this.materialPreviews.delete(id);
+    this.draft = removeImagePostMaterial(this.draft, id);
+    void this.persistAndRender();
+  }
   private async persistAndRender(): Promise<void> { if (this.draft) await this.deps.workspace.saveDraft(this.draft); if (!this.disposed) this.deps.requestRender(); }
+}
+
+class ImagePostMaterialPreviewModal extends Modal {
+  private index: number;
+
+  constructor(
+    app: App,
+    private readonly entries: readonly { material: ImagePostMaterial; url: string }[],
+    initialIndex: number,
+  ) {
+    super(app);
+    this.index = initialIndex;
+  }
+
+  onOpen(): void {
+    this.modalEl.addClass('ailu-image-post-preview-modal');
+    this.renderPreview();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+
+  private renderPreview(): void {
+    this.contentEl.empty();
+    const entry = this.entries[this.index];
+    if (!entry) return;
+    const header = this.contentEl.createDiv({ cls: 'ailu-image-post-preview-header' });
+    header.createEl('strong', {
+      text: entry.material.kind === 'photo'
+        ? entry.material.originalName
+        : entry.material.fileName,
+    });
+    header.createSpan({
+      text: `${this.index + 1}/${this.entries.length} · ${entry.material.width}×${entry.material.height}`,
+    });
+    this.contentEl.createEl('img', {
+      cls: 'ailu-image-post-preview-large',
+      attr: { src: entry.url, alt: entry.material.fileName },
+    });
+    const navigation = this.contentEl.createDiv({ cls: 'ailu-image-post-preview-navigation' });
+    const previous = navigation.createEl('button', {
+      attr: { type: 'button', 'aria-label': '上一张图片' },
+    });
+    setIcon(previous, 'chevron-left');
+    previous.disabled = this.index === 0;
+    previous.onclick = () => { this.index -= 1; this.renderPreview(); };
+    const next = navigation.createEl('button', {
+      attr: { type: 'button', 'aria-label': '下一张图片' },
+    });
+    setIcon(next, 'chevron-right');
+    next.disabled = this.index === this.entries.length - 1;
+    next.onclick = () => { this.index += 1; this.renderPreview(); };
+  }
 }
 
 async function imageDimensions(file: File): Promise<{ width: number; height: number }> {

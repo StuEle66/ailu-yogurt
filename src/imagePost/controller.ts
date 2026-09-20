@@ -7,6 +7,7 @@ import {
   ImagePostDraftStore,
   ManagedImagePostAssetStore,
   type ImagePostDraft,
+  type ImagePostMaterial,
   type ImagePostSource,
   type ImportImagePostPhotoInput,
   type ImportRenderedImagePostCardInput,
@@ -65,8 +66,13 @@ export class ImagePostWorkspaceController {
     return this.assets.importRenderedCard(input);
   }
 
-  handoff(prepared: PreparedImagePost, signal?: AbortSignal) {
-    return handoffPreparedImagePost(prepared, this.coordinator, signal);
+  readMaterialBytes(material: ImagePostMaterial): Promise<Uint8Array> {
+    return this.assets.readMaterial(material);
+  }
+
+  async handoff(prepared: PreparedImagePost, signal?: AbortSignal) {
+    await Promise.all(prepared.materials.map(material => this.assets.readMaterial(material)));
+    return await handoffPreparedImagePost(prepared, this.coordinator, signal);
   }
 }
 

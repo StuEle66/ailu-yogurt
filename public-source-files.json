@@ -73,6 +73,7 @@
     "src/imagePost/draftStore.ts",
     "src/imagePost/index.ts",
     "src/imagePost/managedAssetStore.ts",
+    "src/imagePost/previewStore.ts",
     "src/imagePost/workspaceService.ts",
     "src/main.ts",
     "src/memory/creativeMemory.ts",

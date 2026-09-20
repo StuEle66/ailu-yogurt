@@ -9075,12 +9075,87 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   box-shadow: inset 0 0 0 1px var(--interactive-accent);
 }
 
-.ailu-image-post-material > img {
+.ailu-image-post-material-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.ailu-image-post-material-preview > img {
   display: block;
   width: 100%;
   aspect-ratio: 3 / 4;
   object-fit: contain;
   background: var(--background-primary);
+}
+
+.ailu-image-post-material-placeholder,
+.ailu-image-post-material-error {
+  display: grid;
+  min-height: 180px;
+  padding: 14px;
+  place-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--background-primary);
+}
+
+.ailu-image-post-material-error > svg {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto;
+}
+
+.ailu-image-post-material-error > span {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ailu-image-post-material-recovery {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ailu-image-post-preview-modal {
+  width: min(92vw, 960px);
+}
+
+.ailu-image-post-preview-header,
+.ailu-image-post-preview-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ailu-image-post-preview-header {
+  margin-bottom: 12px;
+}
+
+.ailu-image-post-preview-header > span {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ailu-image-post-preview-large {
+  display: block;
+  max-width: 100%;
+  max-height: min(72vh, 900px);
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.ailu-image-post-preview-navigation {
+  justify-content: center;
+  margin-top: 12px;
 }
 
 .ailu-image-post-material-meta {

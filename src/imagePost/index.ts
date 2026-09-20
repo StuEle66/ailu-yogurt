@@ -35,6 +35,7 @@ export {
   ImagePostDraftStore,
   type ImagePostDraftFileSystem,
 } from './draftStore';
+export { ManagedImagePostPreviewStore } from './previewStore';
 
 export type ImagePostMaterial = ImagePostCardMaterial | ImagePostPhotoMaterial;
 

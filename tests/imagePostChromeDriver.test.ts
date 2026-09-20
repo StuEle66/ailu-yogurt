@@ -155,6 +155,7 @@ describe('image post Chrome driver', () => {
     const profile = imagePostBrowserProfile('wechat-image');
     expect(profile.fileInputSelector).toBe('.js_upload_btn_container input[type="file"]');
     expect(profile.bodySelectors[0]).toBe('.share-text__input .ProseMirror');
+    expect(profile.uploadedImageSelector).toBe('.image-selector__bottom-list-item');
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

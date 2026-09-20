@@ -14,6 +14,7 @@ import type {
 interface BrowserProfile {
   editorUrl: string;
   fileInputSelector: string;
+  uploadedImageSelector: string;
   titleSelectors: readonly string[];
   bodySelectors: readonly string[];
   terminalActionSelectors: readonly string[];
@@ -23,6 +24,7 @@ const PROFILES: Readonly<Record<ImagePostDestination, BrowserProfile>> = Object.
   rednote: Object.freeze({
     editorUrl: 'https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch&target=image',
     fileInputSelector: 'input[type="file"]',
+    uploadedImageSelector: '[class*="upload"] img, [class*="image"] img, [class*="material"] img',
     titleSelectors: Object.freeze(['input[placeholder*="填写标题"]', 'input[placeholder*="标题"]', 'input.d-text']),
     bodySelectors: Object.freeze(['.tiptap.ProseMirror', '.ProseMirror[contenteditable="true"]', '[contenteditable="true"]']),
     terminalActionSelectors: Object.freeze([]),
@@ -30,6 +32,7 @@ const PROFILES: Readonly<Record<ImagePostDestination, BrowserProfile>> = Object.
   'wechat-image': Object.freeze({
     editorUrl: 'https://mp.weixin.qq.com/',
     fileInputSelector: '.js_upload_btn_container input[type="file"]',
+    uploadedImageSelector: '.image-selector__bottom-list-item',
     titleSelectors: Object.freeze(['input[placeholder*="标题"]', 'textarea[placeholder*="标题"]', '#title']),
     bodySelectors: Object.freeze([
       '.share-text__input .ProseMirror',
@@ -195,7 +198,7 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
         url: location.href,
         text: (document.body?.innerText || '').slice(0, 20000),
         fileInputCount: document.querySelectorAll('input[type="file"]').length,
-        uploadedImageCount: document.querySelectorAll('[class*="upload"] img, [class*="image"] img, [class*="material"] img').length,
+        uploadedImageCount: document.querySelectorAll(${JSON.stringify(profile.uploadedImageSelector)}).length,
         hasTitle: title.present,
         hasBody: body.present,
         hasContent: Boolean(title.value.trim() || body.value.trim()),

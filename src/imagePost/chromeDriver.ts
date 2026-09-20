@@ -33,6 +33,8 @@ const PROFILES: Readonly<Record<ImagePostDestination, BrowserProfile>> = Object.
   }),
 });
 
+export const WECHAT_IMAGE_COMPOSER_LABELS = Object.freeze(['贴图', '图片/文字', '图片消息', '小绿书']);
+
 export function imagePostBrowserProfile(destination: ImagePostDestination): BrowserProfile {
   return PROFILES[destination];
 }
@@ -124,7 +126,7 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     const snapshot = await this.snapshot(signal);
     if (/扫码登录|登录公众平台/u.test(snapshot.text) || snapshot.fileInputCount > 0) return;
     await this.evaluate<void>(`(() => {
-      const wanted = ['图片/文字', '图片消息', '小绿书'];
+      const wanted = ${JSON.stringify(WECHAT_IMAGE_COMPOSER_LABELS)};
       const element = [...document.querySelectorAll('a,button,[role="button"]')]
         .find(node => wanted.some(label => (node.textContent || '').trim().includes(label)));
       if (element instanceof HTMLElement) element.click();

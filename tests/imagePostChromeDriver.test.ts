@@ -13,6 +13,7 @@ import {
   imagePostBrowserProfile,
   selectExistingImagePostTarget,
   waitForImagePostComposerState,
+  WECHAT_IMAGE_COMPOSER_LABELS,
 } from '../src/imagePost/chromeDriver';
 
 afterEach(() => {
@@ -100,6 +101,10 @@ describe('image post Chrome driver', () => {
     ], imagePostBrowserProfile('wechat-image').editorUrl)).toEqual({
       webSocketDebuggerUrl: 'ws://127.0.0.1/devtools/page/authenticated',
     });
+  });
+
+  it('recognizes the current WeChat image-post entry label', () => {
+    expect(WECHAT_IMAGE_COMPOSER_LABELS).toContain('贴图');
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

@@ -13,6 +13,7 @@ import type {
 
 interface BrowserProfile {
   editorUrl: string;
+  fileInputSelector: string;
   titleSelectors: readonly string[];
   bodySelectors: readonly string[];
   terminalActionSelectors: readonly string[];
@@ -21,14 +22,21 @@ interface BrowserProfile {
 const PROFILES: Readonly<Record<ImagePostDestination, BrowserProfile>> = Object.freeze({
   rednote: Object.freeze({
     editorUrl: 'https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch&target=image',
+    fileInputSelector: 'input[type="file"]',
     titleSelectors: Object.freeze(['input[placeholder*="填写标题"]', 'input[placeholder*="标题"]', 'input.d-text']),
     bodySelectors: Object.freeze(['.tiptap.ProseMirror', '.ProseMirror[contenteditable="true"]', '[contenteditable="true"]']),
     terminalActionSelectors: Object.freeze([]),
   }),
   'wechat-image': Object.freeze({
     editorUrl: 'https://mp.weixin.qq.com/',
+    fileInputSelector: '.js_upload_btn_container input[type="file"]',
     titleSelectors: Object.freeze(['input[placeholder*="标题"]', 'textarea[placeholder*="标题"]', '#title']),
-    bodySelectors: Object.freeze(['textarea[placeholder*="描述"]', 'textarea[placeholder*="正文"]', '[contenteditable="true"]']),
+    bodySelectors: Object.freeze([
+      '.share-text__input .ProseMirror',
+      'textarea[placeholder*="描述"]',
+      'textarea[placeholder*="正文"]',
+      '[contenteditable="true"]',
+    ]),
     terminalActionSelectors: Object.freeze([]),
   }),
 });
@@ -72,7 +80,7 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     const document = await session.send<{ root: { nodeId: number } }>('DOM.getDocument', { depth: 2, pierce: true });
     const input = await session.send<{ nodeId: number }>('DOM.querySelector', {
       nodeId: document.root.nodeId,
-      selector: 'input[type="file"]',
+      selector: imagePostBrowserProfile(this.destination).fileInputSelector,
     });
     if (!input.nodeId) throw new Error('后台图片上传控件已变化，Ailu 已停止填写。');
     if (signal.aborted) throw abortError();

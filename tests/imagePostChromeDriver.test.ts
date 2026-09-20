@@ -13,6 +13,7 @@ import {
   imagePostBrowserProfile,
   selectExistingImagePostTarget,
   waitForImagePostComposerState,
+  WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR,
   WECHAT_IMAGE_COMPOSER_LABELS,
 } from '../src/imagePost/chromeDriver';
 
@@ -105,6 +106,7 @@ describe('image post Chrome driver', () => {
 
   it('recognizes the current WeChat image-post entry label', () => {
     expect(WECHAT_IMAGE_COMPOSER_LABELS).toContain('贴图');
+    expect(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR).toContain('.new-creation__menu-item');
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

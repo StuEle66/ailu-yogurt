@@ -11,6 +11,7 @@ import {
   classifyImagePostComposerSnapshot,
   DedicatedChromeController,
   imagePostBrowserProfile,
+  waitForImagePostComposerState,
 } from '../src/imagePost/chromeDriver';
 
 afterEach(() => {
@@ -63,6 +64,19 @@ describe('image post Chrome driver', () => {
       hasBody: false,
       hasContent: false,
     })).toBe('login-required');
+  });
+
+  it('waits for a newly opened image editor to finish mounting its controls', async () => {
+    const states = ['page-changed', 'page-changed', 'empty'] as const;
+    let reads = 0;
+    let waits = 0;
+
+    await expect(waitForImagePostComposerState(
+      async () => states[Math.min(reads++, states.length - 1)],
+      async () => { waits += 1; },
+    )).resolves.toBe('empty');
+    expect(reads).toBe(3);
+    expect(waits).toBe(2);
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

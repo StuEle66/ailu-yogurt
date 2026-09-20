@@ -57,8 +57,10 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
   }
 
   async inspectEditor(signal: AbortSignal): Promise<ImagePostComposerState> {
-    const snapshot = await this.snapshot(signal);
-    return classifyImagePostComposerSnapshot(snapshot);
+    return waitForImagePostComposerState(
+      async () => classifyImagePostComposerSnapshot(await this.snapshot(signal)),
+      async () => delay(500, signal),
+    );
   }
 
   async uploadImages(paths: readonly string[], signal: AbortSignal): Promise<void> {
@@ -212,6 +214,19 @@ export function classifyImagePostComposerSnapshot(snapshot: {
     && /上传图文|上传图片/u.test(snapshot.text)) return 'empty';
   if (!snapshot.fileInputCount || (!snapshot.hasTitle && !snapshot.hasBody)) return 'page-changed';
   return snapshot.hasContent || snapshot.uploadedImageCount > 0 ? 'content-present' : 'empty';
+}
+
+export async function waitForImagePostComposerState(
+  readState: () => Promise<ImagePostComposerState>,
+  wait: () => Promise<void>,
+  attempts = 20,
+): Promise<ImagePostComposerState> {
+  let state = await readState();
+  for (let attempt = 1; state === 'page-changed' && attempt < attempts; attempt += 1) {
+    await wait();
+    state = await readState();
+  }
+  return state;
 }
 
 export class DedicatedChromeController {

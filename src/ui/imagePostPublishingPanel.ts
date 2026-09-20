@@ -8,6 +8,7 @@ import {
   moveImagePostMaterial,
   prepareImagePost,
   removeImagePostMaterial,
+  replaceImagePostMaterial,
   resetDestinationImagePostCopy,
   setDestinationImagePostCopy,
   setImagePostLeadMaterial,
@@ -121,7 +122,7 @@ export class ImagePostPublishingPanel {
     const header = composer.createDiv({ cls: 'ailu-image-post-composer-header' });
     const heading = header.createDiv();
     heading.createEl('h3', { text: '图文草稿' });
-    heading.createEl('p', { text: this.deps.file ? '图卡和照片可以混排；发送后会停在后台编辑页。' : '纯照片模式；无需打开 Markdown。' });
+    heading.createEl('p', { text: this.deps.file ? '手动照片单独发送；上方图卡预览仅供参考。' : '纯照片模式；无需打开 Markdown。' });
     const importButton = header.createEl('button', { attr: { type: 'button' } });
     setIcon(importButton.createSpan(), 'images');
     importButton.createSpan({ text: '选择照片' });
@@ -141,7 +142,7 @@ export class ImagePostPublishingPanel {
       cls: 'ailu-image-post-dropzone',
       attr: { tabindex: '0', role: 'button', 'aria-label': '拖入或选择图文照片' },
     });
-    drop.createSpan({ text: draft.materials.length ? `${draft.materials.length} 张素材` : '拖入 JPEG、PNG 或 WebP 照片' });
+    drop.createSpan({ text: draft.materials.length ? `${draft.materials.length} 张照片` : '拖入 JPEG、PNG 或 WebP 照片' });
     drop.ondragover = event => { event.preventDefault(); drop.addClass('is-dragging'); };
     drop.ondragleave = () => drop.removeClass('is-dragging');
     drop.ondrop = event => {
@@ -150,11 +151,6 @@ export class ImagePostPublishingPanel {
     };
     drop.onclick = () => void this.choosePhotos();
 
-    if (this.cards) {
-      const addCards = composer.createEl('button', { cls: 'ailu-image-post-add-cards', text: '加入当前 Markdown 图卡', attr: { type: 'button' } });
-      addCards.disabled = this.isBusy();
-      addCards.onclick = () => void this.materializeCards();
-    }
     this.renderMaterials(composer, draft);
     this.renderCopyEditor(composer, draft);
     this.renderDestinations(composer, draft);
@@ -169,7 +165,7 @@ export class ImagePostPublishingPanel {
         articlePath: this.deps.file.path,
         contentVersion: createHash('sha256').update(source, 'utf8').digest('hex'),
       } : null;
-      const draft = await this.deps.workspace.loadDraft(identity);
+      const draft = await this.deps.workspace.loadDraft(identity, 'photos');
       if (identity) draft.source = identity;
       if (!draft.sharedCopy.title && this.deps.file) draft.sharedCopy.title = this.deps.file.basename;
       this.draft = draft;
@@ -263,7 +259,8 @@ export class ImagePostPublishingPanel {
     const section = parent.createDiv({ cls: 'ailu-image-post-copy' });
     section.createEl('h4', { text: '共用文案' });
     this.renderCopyFields(section, draft.sharedCopy, copy => {
-      this.draft = updateSharedImagePostCopy(draft, copy); void this.persistAndRender();
+      if (!this.draft) return;
+      this.draft = updateSharedImagePostCopy(this.draft, copy); void this.persistAndRender();
     });
     const overrides = section.createDiv({ cls: 'ailu-image-post-overrides' });
     for (const destination of ['rednote', 'wechat-image'] as const) {
@@ -274,13 +271,15 @@ export class ImagePostPublishingPanel {
       toggle.checked = enabled;
       row.createSpan({ text: label });
       toggle.onchange = () => {
+        if (!this.draft) return;
         this.draft = toggle.checked
-          ? setDestinationImagePostCopy(draft, destination, draft.sharedCopy)
-          : resetDestinationImagePostCopy(draft, destination);
+          ? setDestinationImagePostCopy(this.draft, destination, this.draft.sharedCopy)
+          : resetDestinationImagePostCopy(this.draft, destination);
         void this.persistAndRender();
       };
       if (enabled) this.renderCopyFields(overrides, draft.destinationCopy[destination]!, copy => {
-        this.draft = setDestinationImagePostCopy(draft, destination, copy); void this.persistAndRender();
+        if (!this.draft) return;
+        this.draft = setDestinationImagePostCopy(this.draft, destination, copy); void this.persistAndRender();
       }, destination === 'rednote' ? '小红书' : '微信贴图');
     }
   }
@@ -382,15 +381,7 @@ export class ImagePostPublishingPanel {
         originalName: file.name,
         ...await imageDimensions(file),
       });
-      const materials = [...this.draft.materials];
-      materials[index] = material;
-      const next = {
-        ...this.draft,
-        materials,
-        leadMaterialId: this.draft.leadMaterialId === materialId
-          ? material.id
-          : this.draft.leadMaterialId,
-      };
+      const next = replaceImagePostMaterial(this.draft, materialId, material);
       this.previewStore.release(materialId);
       this.materialPreviews.delete(materialId);
       this.draft = next;
@@ -409,40 +400,25 @@ export class ImagePostPublishingPanel {
     this.busy = true; this.status = '正在复制照片到 .ailu 受管目录…'; this.error = ''; this.deps.requestRender();
     try {
       let next = this.draft;
+      let imported = 0;
+      const failures: string[] = [];
       for (const file of Array.from(files)) {
-        const sourcePath = electronWebUtils?.getPathForFile(file) || (file as File & { path?: string }).path;
-        if (!sourcePath) throw new Error(`无法读取“${file.name}”的本地路径。`);
-        const dimensions = await imageDimensions(file);
-        const material = await this.deps.workspace.importPhoto({ sourcePath, originalName: file.name, ...dimensions });
-        next = addImagePostMaterial(next, material);
+        try {
+          const sourcePath = electronWebUtils?.getPathForFile(file) || (file as File & { path?: string }).path;
+          if (!sourcePath) throw new Error(`无法读取“${file.name}”的本地路径。`);
+          const dimensions = await imageDimensions(file);
+          const material = await this.deps.workspace.importPhoto({ sourcePath, originalName: file.name, ...dimensions });
+          next = addImagePostMaterial(next, material);
+          imported += 1;
+        } catch (error) {
+          failures.push(error instanceof Error ? error.message : `“${file.name}”导入失败。`);
+        }
       }
-      this.draft = next; await this.deps.workspace.saveDraft(next); this.status = `已加入 ${files.length} 张照片。`;
+      this.draft = next;
+      if (imported) await this.deps.workspace.saveDraft(next);
+      this.status = imported ? `已加入 ${imported} 张照片。` : '';
+      if (failures.length) this.error = failures.join(' ');
     } catch (error) { this.error = error instanceof Error ? error.message : '照片导入失败。'; }
-    finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
-  }
-
-  private async materializeCards(): Promise<void> {
-    if (!this.cards || !this.draft || this.busy) return;
-    this.busy = true; this.status = '正在冻结当前图卡…'; this.error = ''; this.deps.requestRender();
-    try {
-      const rendered = await this.cards.renderImagesForPost();
-      const cards: ImagePostMaterial[] = [];
-      for (let index = 0; index < rendered.length; index += 1) {
-        cards.push(await this.deps.workspace.importRenderedCard({
-          bytes: new Uint8Array(await rendered[index].blob.arrayBuffer()),
-          fileName: rendered[index].fileName,
-          page: index + 1,
-          width: 1800,
-          height: 2400,
-        }));
-      }
-      let next: ImagePostDraft = {
-        ...this.draft,
-        materials: this.draft.materials.filter(material => material.kind !== 'card'),
-      };
-      for (const card of cards) next = addImagePostMaterial(next, card);
-      this.draft = next; await this.deps.workspace.saveDraft(next); this.status = `已加入 ${cards.length} 张当前图卡。`;
-    } catch (error) { this.error = error instanceof Error ? error.message : '图卡冻结失败。'; }
     finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
   }
 

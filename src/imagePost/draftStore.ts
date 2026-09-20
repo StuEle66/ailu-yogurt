@@ -66,10 +66,15 @@ function normalizeDraft(value: unknown): ImagePostDraft {
     ? null
     : normalizeSource(value.source);
   if (!Array.isArray(value.materials)) throw new Error('素材列表无效');
-  const materials = value.materials.map(normalizeMaterial);
+  const workflow: ImagePostDraft['workflow'] = value.workflow === 'cards' ? 'cards' : 'photos';
+  const revision = typeof value.revision === 'number' && Number.isInteger(value.revision) && value.revision >= 0
+    ? value.revision : 0;
+  const normalizedMaterials = value.materials.map(normalizeMaterial);
+  const materials = normalizedMaterials.filter(material => material.kind === (workflow === 'cards' ? 'card' : 'photo'));
   const ids = new Set(materials.map(material => material.id));
   if (ids.size !== materials.length) throw new Error('素材 ID 重复');
-  const leadMaterialId = value.leadMaterialId;
+  const leadMaterialId = materials.some(material => material.id === value.leadMaterialId)
+    ? value.leadMaterialId : materials[0]?.id ?? null;
   if (leadMaterialId !== null && typeof leadMaterialId !== 'string') {
     throw new Error('首图 ID 无效');
   }
@@ -88,6 +93,8 @@ function normalizeDraft(value: unknown): ImagePostDraft {
   }
   return {
     id: value.id,
+    workflow,
+    revision,
     source,
     materials,
     leadMaterialId,

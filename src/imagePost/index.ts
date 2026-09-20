@@ -55,6 +55,8 @@ export interface PreparedImagePostCopy {
 
 export interface ImagePostDraft {
   id: string;
+  workflow: 'cards' | 'photos';
+  revision: number;
   source: ImagePostSource | null;
   materials: ImagePostMaterial[];
   leadMaterialId: string | null;
@@ -65,6 +67,8 @@ export interface ImagePostDraft {
 export interface PreparedImagePost {
   schemaVersion: 1;
   draftId: string;
+  workflow: 'cards' | 'photos';
+  revision: number;
   source: Readonly<ImagePostSource> | null;
   contentHash: string;
   destinations: readonly ImagePostDestination[];
@@ -101,9 +105,12 @@ export interface ImagePostDestinationOutcome {
 export function createImagePostDraft(input: {
   id: string;
   source: ImagePostSource | null;
+  workflow?: 'cards' | 'photos';
 }): ImagePostDraft {
   return {
     ...input,
+    workflow: input.workflow ?? 'photos',
+    revision: 0,
     materials: [],
     leadMaterialId: null,
     sharedCopy: { title: '', body: '', topics: [] },
@@ -115,7 +122,7 @@ export function updateSharedImagePostCopy(
   draft: ImagePostDraft,
   copy: ImagePostCopy,
 ): ImagePostDraft {
-  return { ...draft, sharedCopy: cloneCopy(copy) };
+  return nextRevision(draft, { sharedCopy: cloneCopy(copy) });
 }
 
 export function setDestinationImagePostCopy(
@@ -123,13 +130,12 @@ export function setDestinationImagePostCopy(
   destination: ImagePostDestination,
   copy: ImagePostCopy,
 ): ImagePostDraft {
-  return {
-    ...draft,
+  return nextRevision(draft, {
     destinationCopy: {
       ...draft.destinationCopy,
       [destination]: cloneCopy(copy),
     },
-  };
+  });
 }
 
 export function resetDestinationImagePostCopy(
@@ -138,7 +144,7 @@ export function resetDestinationImagePostCopy(
 ): ImagePostDraft {
   const destinationCopy = { ...draft.destinationCopy };
   delete destinationCopy[destination];
-  return { ...draft, destinationCopy };
+  return nextRevision(draft, { destinationCopy });
 }
 
 export function resolveImagePostCopy(
@@ -187,6 +193,8 @@ export function prepareImagePost(
   const hashPayload = {
     schemaVersion: 1,
     draftId: draft.id,
+    workflow: draft.workflow,
+    revision: draft.revision,
     source,
     destinations: frozenDestinations,
     materials,
@@ -298,11 +306,16 @@ export function addImagePostMaterial(
   if (draft.materials.some(existing => existing.id === material.id)) {
     throw new Error(`图文素材 ID 重复：${material.id}`);
   }
-  return {
-    ...draft,
+  if (draft.workflow === 'photos' && material.kind !== 'photo') {
+    throw new Error('照片草稿只能包含手动选择的照片。');
+  }
+  if (draft.workflow === 'cards' && material.kind !== 'card') {
+    throw new Error('图卡工作区只能包含渲染图卡。');
+  }
+  return nextRevision(draft, {
     materials: [...draft.materials, { ...material }],
     leadMaterialId: draft.leadMaterialId ?? material.id,
-  };
+  });
 }
 
 export function moveImagePostMaterial(
@@ -316,7 +329,7 @@ export function moveImagePostMaterial(
   const [material] = materials.splice(currentIndex, 1);
   const targetIndex = Math.max(0, Math.min(Math.trunc(index), materials.length));
   materials.splice(targetIndex, 0, material);
-  return { ...draft, materials };
+  return nextRevision(draft, { materials });
 }
 
 export function removeImagePostMaterial(
@@ -325,13 +338,12 @@ export function removeImagePostMaterial(
 ): ImagePostDraft {
   const materials = draft.materials.filter(material => material.id !== materialId);
   if (materials.length === draft.materials.length) return draft;
-  return {
-    ...draft,
+  return nextRevision(draft, {
     materials,
     leadMaterialId: draft.leadMaterialId === materialId
       ? materials[0]?.id ?? null
       : draft.leadMaterialId,
-  };
+  });
 }
 
 export function setImagePostLeadMaterial(
@@ -341,7 +353,35 @@ export function setImagePostLeadMaterial(
   if (!draft.materials.some(material => material.id === materialId)) {
     throw new Error(`找不到图文素材：${materialId}`);
   }
-  return { ...draft, leadMaterialId: materialId };
+  return nextRevision(draft, { leadMaterialId: materialId });
+}
+
+export function replaceImagePostMaterial(
+  draft: ImagePostDraft,
+  materialId: string,
+  material: ImagePostMaterial,
+): ImagePostDraft {
+  const index = draft.materials.findIndex(candidate => candidate.id === materialId);
+  if (index < 0) throw new Error(`找不到图文素材：${materialId}`);
+  if (draft.workflow === 'photos' && material.kind !== 'photo') {
+    throw new Error('照片草稿只能包含手动选择的照片。');
+  }
+  if (draft.workflow === 'cards' && material.kind !== 'card') {
+    throw new Error('图卡工作区只能包含渲染图卡。');
+  }
+  const materials = [...draft.materials];
+  materials[index] = { ...material };
+  return nextRevision(draft, {
+    materials,
+    leadMaterialId: draft.leadMaterialId === materialId ? material.id : draft.leadMaterialId,
+  });
+}
+
+function nextRevision(
+  draft: ImagePostDraft,
+  patch: Partial<Omit<ImagePostDraft, 'id' | 'workflow' | 'revision'>>,
+): ImagePostDraft {
+  return { ...draft, ...patch, revision: draft.revision + 1 };
 }
 
 export * from './adapters';

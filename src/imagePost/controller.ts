@@ -53,9 +53,13 @@ export class ImagePostWorkspaceController {
     });
   }
 
-  async loadDraft(source: ImagePostSource | null): Promise<ImagePostDraft> {
-    const id = imagePostDraftId(source?.articlePath ?? null);
-    return await this.drafts.load(id) ?? createImagePostDraft({ id, source });
+  async loadDraft(
+    source: ImagePostSource | null,
+    workflow: ImagePostDraft['workflow'] = 'photos',
+  ): Promise<ImagePostDraft> {
+    const baseId = imagePostDraftId(source?.articlePath ?? null);
+    const id = workflow === 'cards' ? `cards_${baseId}` : baseId;
+    return await this.drafts.load(id) ?? createImagePostDraft({ id, source, workflow });
   }
 
   saveDraft(draft: ImagePostDraft): Promise<void> {

@@ -10,7 +10,7 @@ const versions = JSON.parse(fs.readFileSync('versions.json', 'utf8'));
 
 const EXPECTED_PLUGIN_ID = 'ailu';
 const EXPECTED_PLUGIN_NAME = 'Ailu';
-const EXPECTED_VERSION = '0.5.0';
+const EXPECTED_VERSION = '0.5.1';
 const STORAGE_NAMESPACE = '.ailu';
 const BUILD_ATTESTATION = 'build-attestation.json';
 const DISTRIBUTION_LEGAL_FILES = [
@@ -124,7 +124,7 @@ requireCondition(
 );
 requireCondition(versions[manifest.version] === manifest.minAppVersion, 'versions.json must map the current version to minAppVersion.');
 requireCondition(
-  Object.keys(versions).length === 6 && versions['0.2.0'] === '1.11.4' && Object.hasOwn(versions, EXPECTED_VERSION),
+  Object.keys(versions).length === 7 && versions['0.2.0'] === '1.11.4' && Object.hasOwn(versions, EXPECTED_VERSION),
   'The Ailu plugin id must retain the upstream 0.2.0 and current fork release history.',
 );
 requireCondition(typeof manifest.description === 'string' && manifest.description.length <= 250, 'Manifest description must be at most 250 characters.');

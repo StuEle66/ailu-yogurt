@@ -107,6 +107,11 @@ describe('image post Chrome driver', () => {
   it('recognizes the current WeChat image-post entry label', () => {
     expect(WECHAT_IMAGE_COMPOSER_LABELS).toContain('贴图');
     expect(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR).toContain('.new-creation__menu-item');
+    const source = fs.readFileSync(
+      fileURLToPath(new URL('../src/imagePost/chromeDriver.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toContain("'Input.dispatchMouseEvent'");
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

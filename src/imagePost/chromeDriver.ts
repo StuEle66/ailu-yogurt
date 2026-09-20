@@ -126,12 +126,23 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
   private async openWechatImageComposerIfAvailable(signal: AbortSignal): Promise<void> {
     const snapshot = await this.snapshot(signal);
     if (/扫码登录|登录公众平台/u.test(snapshot.text) || snapshot.fileInputCount > 0) return;
-    await this.evaluate<void>(`(() => {
+    const point = await this.evaluate<{ x: number; y: number } | null>(`(() => {
       const wanted = ${JSON.stringify(WECHAT_IMAGE_COMPOSER_LABELS)};
       const element = [...document.querySelectorAll(${JSON.stringify(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR)})]
         .find(node => wanted.some(label => (node.textContent || '').trim().includes(label)));
-      if (element instanceof HTMLElement) element.click();
+      if (!(element instanceof HTMLElement)) return null;
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);
+    if (!point) return;
+    const session = this.requireSession();
+    await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+    await session.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed', button: 'left', clickCount: 1, ...point,
+    });
+    await session.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased', button: 'left', clickCount: 1, ...point,
+    });
     await delay(1_000, signal);
   }
 

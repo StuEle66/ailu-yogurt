@@ -377,6 +377,47 @@ export class ImagePostPublishingPanel {
         retry.onclick = () => void this.handoffDestinations([destination]);
       }
     }
+    const utilities = footer.createDiv({ cls: 'ailu-image-post-handoff-utilities' });
+    for (const destination of ['rednote', 'wechat-image'] as const) {
+      const open = utilities.createEl('button', {
+        text: `打开${destinationName(destination)}后台`,
+        attr: { type: 'button' },
+      });
+      open.onclick = () => void this.openDestination(destination);
+    }
+    const diagnostic = utilities.createEl('button', {
+      text: '复制诊断摘要',
+      attr: { type: 'button' },
+    });
+    diagnostic.onclick = () => void this.copyDiagnosticSummary(draft);
+  }
+
+  private async openDestination(destination: ImagePostDestination): Promise<void> {
+    try {
+      await this.deps.workspace.openDestination(destination);
+      new Notice(`${destinationName(destination)}后台已在专用 Chrome 中打开。`);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : '无法打开专用 Chrome。');
+    }
+  }
+
+  private async copyDiagnosticSummary(draft: ImagePostDraft): Promise<void> {
+    const lines = [
+      `Ailu 图文诊断`,
+      `工作区：${draft.workflow}`,
+      `修订：${draft.revision}`,
+      `图片：${draft.workflow === 'cards' ? draft.selectedCardPages.length : draft.materials.length}`,
+      ...(['rednote', 'wechat-image'] as const).map(destination => {
+        const run = this.destinationRuns[destination];
+        return `${destinationName(destination)}：${run.status}${run.message ? ` · ${run.message}` : ''}`;
+      }),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      new Notice('图文诊断摘要已复制，不包含文案、Cookie 或图片内容。');
+    } catch {
+      new Notice('复制诊断摘要失败，请检查系统剪贴板权限。');
+    }
   }
 
   private handoffButton(

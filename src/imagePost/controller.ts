@@ -7,6 +7,7 @@ import {
   ImagePostDraftStore,
   ManagedImagePostAssetStore,
   type ImagePostDraft,
+  type ImagePostDestination,
   type ImagePostMaterial,
   type ImagePostSource,
   type ImportImagePostPhotoInput,
@@ -41,6 +42,10 @@ export class ImagePostWorkspaceController {
   constructor(
     rootDirectory: string,
     private readonly coordinator: ImagePostHandoffCoordinatorLike,
+    private readonly openDestinationEditor?: (
+      destination: ImagePostDestination,
+      signal: AbortSignal,
+    ) => Promise<void>,
   ) {
     this.drafts = new ImagePostDraftStore({
       directory: path.join(rootDirectory, 'drafts'),
@@ -81,6 +86,11 @@ export class ImagePostWorkspaceController {
   async handoff(prepared: PreparedImagePost, options: ImagePostHandoffOptions = {}) {
     await Promise.all(prepared.materials.map(material => this.assets.readMaterial(material)));
     return await handoffPreparedImagePost(prepared, this.coordinator, options);
+  }
+
+  async openDestination(destination: ImagePostDestination): Promise<void> {
+    if (!this.openDestinationEditor) throw new Error('专用 Chrome 打开入口不可用。');
+    await this.openDestinationEditor(destination, AbortSignal.timeout(30_000));
   }
 }
 

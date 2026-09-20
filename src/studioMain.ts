@@ -44,7 +44,11 @@ import {
   createXiaohongshuImagePostAdapter,
   ImagePostHandoffCoordinator,
 } from './imagePost';
-import { DedicatedChromeController, DedicatedChromeImagePostDriver } from './imagePost/chromeDriver';
+import {
+  DedicatedChromeController,
+  DedicatedChromeImagePostDriver,
+  imagePostBrowserProfile,
+} from './imagePost/chromeDriver';
 import { ImagePostWorkspaceController } from './imagePost/controller';
 import { durableRuntimeFingerprint } from './storage/runtimeSnapshot';
 import { appendLocalLog } from './storage/localLog';
@@ -154,6 +158,13 @@ export default class AiluPlugin extends Plugin {
         createXiaohongshuImagePostAdapter(new DedicatedChromeImagePostDriver('rednote', imagePostChrome)),
         createWechatImagePostAdapter(new DedicatedChromeImagePostDriver('wechat-image', imagePostChrome)),
       ]),
+      async (destination, signal) => {
+        const session = await imagePostChrome.openPage(
+          imagePostBrowserProfile(destination).editorUrl,
+          signal,
+        );
+        session.close();
+      },
     );
     this.homeProcessWriteLock = supportsPhysicalWriter
       ? PythonFcntlProcessWriteLock.forPrivateDirectory(

@@ -57,7 +57,11 @@ export type ImagePostAdapterOutcome =
 export interface ImagePostBrowserDriver {
   openEditor(destination: ImagePostDestination, signal: AbortSignal): Promise<void>;
   inspectEditor(signal: AbortSignal): Promise<ImagePostComposerState>;
-  uploadImages(paths: readonly string[], signal: AbortSignal): Promise<void>;
+  uploadImages(
+    paths: readonly string[],
+    signal: AbortSignal,
+    onProgress?: (completed: number, total: number) => void,
+  ): Promise<void>;
   fillTitle(title: string, signal: AbortSignal): Promise<void>;
   fillBody(body: string, signal: AbortSignal): Promise<void>;
   fillTopics(topics: readonly string[], signal: AbortSignal): Promise<void>;
@@ -82,6 +86,8 @@ export interface ImagePostAdapterProgress {
     | 'verifying'
     | 'completed';
   readonly message: string;
+  readonly completedImages?: number;
+  readonly totalImages?: number;
 }
 
 export interface ImagePostDestinationAdapter {

@@ -14,7 +14,9 @@ import {
   imagePostBrowserProfile,
   selectWechatImageComposerTarget,
   selectExistingImagePostTarget,
+  waitForWechatImageComposerEntryPoint,
   waitForImagePostComposerState,
+  waitForStableUploadedImageCount,
   waitForUploadedImageCount,
   WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR,
   WECHAT_IMAGE_COMPOSER_LABELS,
@@ -25,6 +27,31 @@ afterEach(() => {
 });
 
 describe('image post Chrome driver', () => {
+  it('waits for the asynchronously rendered WeChat image-post entry', async () => {
+    const readPoint = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ x: 120, y: 240 });
+    const wait = vi.fn().mockResolvedValue(undefined);
+
+    await expect(waitForWechatImageComposerEntryPoint(readPoint, wait, 4)).resolves.toEqual({
+      x: 120,
+      y: 240,
+    });
+    expect(readPoint).toHaveBeenCalledTimes(3);
+    expect(wait).toHaveBeenCalledTimes(2);
+  });
+
+  it('uploads image paths one at a time and reports deterministic progress', () => {
+    const source = fs.readFileSync(
+      fileURLToPath(new URL('../src/imagePost/chromeDriver.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toContain('for (let index = 0; index < paths.length; index += 1)');
+    expect(source).toContain('onProgress?.(index + 1, paths.length)');
+    expect(source).not.toContain("files: [...paths]");
+  });
+
   it('ends a CDP command that never returns instead of staying busy forever', async () => {
     class SilentWebSocket extends EventTarget {
       constructor(_url: string) {
@@ -119,6 +146,16 @@ describe('image post Chrome driver', () => {
     expect(waits).toBe(2);
   });
 
+  it('allows a slow platform editor to mount without reporting a page change too early', async () => {
+    let reads = 0;
+
+    await expect(waitForImagePostComposerState(
+      async () => reads++ < 25 ? 'page-changed' : 'empty',
+      async () => undefined,
+    )).resolves.toBe('empty');
+    expect(reads).toBe(26);
+  });
+
   it('polls until every selected image appears in the backend editor', async () => {
     const counts = [0, 1, 2];
     let reads = 0;
@@ -131,6 +168,32 @@ describe('image post Chrome driver', () => {
     )).resolves.toBe(true);
     expect(reads).toBe(3);
     expect(waits).toBe(2);
+  });
+
+  it('does not accept a transient client-side thumbnail as a completed upload', async () => {
+    const counts = [0, 1, 2, 2, 1, 1, 1];
+    let reads = 0;
+
+    await expect(waitForStableUploadedImageCount(
+      async () => counts[Math.min(reads++, counts.length - 1)],
+      async () => undefined,
+      2,
+      7,
+      3,
+    )).resolves.toBe(false);
+  });
+
+  it('accepts the expected backend image count only after it stays stable', async () => {
+    const counts = [0, 1, 2, 2, 2];
+    let reads = 0;
+
+    await expect(waitForStableUploadedImageCount(
+      async () => counts[Math.min(reads++, counts.length - 1)],
+      async () => undefined,
+      2,
+      7,
+      3,
+    )).resolves.toBe(true);
   });
 
   it('reuses the existing authenticated platform tab instead of opening a duplicate', () => {
@@ -216,6 +279,10 @@ describe('image post Chrome driver', () => {
     expect(profile.titleSelectors[0]).toBe('[data-placeholder*="标题"].ProseMirror[contenteditable="true"]');
     expect(profile.bodySelectors[0]).toBe('.share-text__input .ProseMirror');
     expect(profile.uploadedImageSelector).toBe('.image-selector__bottom-list-item');
+  });
+
+  it('counts only Xiaohongshu upload thumbnails instead of duplicate preview images', () => {
+    expect(imagePostBrowserProfile('rednote').uploadedImageSelector).toBe('img.img.preview');
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

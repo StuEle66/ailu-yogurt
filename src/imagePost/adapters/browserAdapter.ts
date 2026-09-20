@@ -70,7 +70,15 @@ export class BrowserImagePostDestinationAdapter implements ImagePostDestinationA
       }
       mutationStarted = true;
       this.progress(options, 'uploading', `正在上传图片到${this.destinationName()}…`);
-      await this.driver.uploadImages(post.images.map(image => image.path), signal);
+      await this.driver.uploadImages(post.images.map(image => image.path), signal, (completed, total) => {
+        this.progress(
+          options,
+          'uploading',
+          `正在上传图片到${this.destinationName()}（${completed}/${total}）…`,
+          completed,
+          total,
+        );
+      });
       this.throwIfAborted(signal);
       this.progress(options, 'filling-title', `正在填写${this.destinationName()}标题…`);
       await this.driver.fillTitle(post.title, signal);
@@ -152,8 +160,16 @@ export class BrowserImagePostDestinationAdapter implements ImagePostDestinationA
     options: PrepareImagePostEditorOptions,
     stage: Parameters<NonNullable<PrepareImagePostEditorOptions['onProgress']>>[0]['stage'],
     message: string,
+    completedImages?: number,
+    totalImages?: number,
   ): void {
-    options.onProgress?.({ destination: this.destination, stage, message });
+    options.onProgress?.({
+      destination: this.destination,
+      stage,
+      message,
+      ...(completedImages === undefined ? {} : { completedImages }),
+      ...(totalImages === undefined ? {} : { totalImages }),
+    });
   }
 
   private destinationName(): string {

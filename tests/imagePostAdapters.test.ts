@@ -43,7 +43,11 @@ class RecordingBrowserDriver implements ImagePostBrowserDriver {
     return this.state;
   }
 
-  async uploadImages(paths: readonly string[]): Promise<void> {
+  async uploadImages(
+    paths: readonly string[],
+    _signal?: AbortSignal,
+    _onProgress?: (completed: number, total: number) => void,
+  ): Promise<void> {
     this.operations.push(`images:${paths.join(',')}`);
     this.state = 'content-present';
   }
@@ -111,6 +115,17 @@ class BlockingBrowserDriver extends RecordingBrowserDriver {
   }
 }
 
+class ProgressBrowserDriver extends RecordingBrowserDriver {
+  override async uploadImages(
+    paths: readonly string[],
+    _signal: AbortSignal,
+    onProgress?: (completed: number, total: number) => void,
+  ): Promise<void> {
+    await super.uploadImages(paths);
+    paths.forEach((_path, index) => onProgress?.(index + 1, paths.length));
+  }
+}
+
 class AbortingAfterUploadBrowserDriver extends RecordingBrowserDriver {
   constructor(private readonly controller: AbortController) {
     super();
@@ -136,6 +151,14 @@ class AbortingAfterInspectBrowserDriver extends RecordingBrowserDriver {
 }
 
 describe('image post browser adapters', () => {
+  test('reports per-image upload progress without changing the frozen order', async () => {
+    const adapter = createWechatImagePostAdapter(new ProgressBrowserDriver());
+    const messages: string[] = [];
+    await adapter.prepareEditor(POST, { onProgress: progress => messages.push(progress.message) });
+    expect(messages).toContain('正在上传图片到微信贴图（1/2）…');
+    expect(messages).toContain('正在上传图片到微信贴图（2/2）…');
+  });
+
   test('fills a clean Xiaohongshu editor and stops for manual review', async () => {
     const browser = new RecordingBrowserDriver();
     const adapter = createXiaohongshuImagePostAdapter(browser);

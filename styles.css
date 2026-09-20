@@ -9254,10 +9254,17 @@ button.ailu-feishu-destination-tree-main:focus-visible {
 }
 
 .ailu-image-post-handoff-actions,
+.ailu-image-post-handoff-utilities,
 .ailu-image-post-destination-status {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.ailu-image-post-handoff-utilities {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .ailu-image-post-handoff-actions > button {

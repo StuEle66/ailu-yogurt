@@ -24,7 +24,7 @@ const PROFILES: Readonly<Record<ImagePostDestination, BrowserProfile>> = Object.
   rednote: Object.freeze({
     editorUrl: 'https://creator.xiaohongshu.com/publish/publish?source=official&from=tab_switch&target=image',
     fileInputSelector: 'input[type="file"]',
-    uploadedImageSelector: '[class*="upload"] img, [class*="image"] img, [class*="material"] img',
+    uploadedImageSelector: 'img.img.preview',
     titleSelectors: Object.freeze(['input[placeholder*="填写标题"]', 'input[placeholder*="标题"]', 'input.d-text']),
     bodySelectors: Object.freeze(['.tiptap.ProseMirror', '.ProseMirror[contenteditable="true"]', '[contenteditable="true"]']),
     terminalActionSelectors: Object.freeze([]),
@@ -67,6 +67,10 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
   async openEditor(destination: ImagePostDestination, signal: AbortSignal): Promise<void> {
     if (destination !== this.destination) throw new Error('图文浏览器目标不匹配。');
     if (signal.aborted) throw abortError();
+    if (this.session && !await this.session.isHealthy()) {
+      this.session.close();
+      this.session = null;
+    }
     if (!this.session) {
       this.session = await this.chrome.openPage(imagePostBrowserProfile(destination).editorUrl, signal);
       await this.session.send('Page.enable');
@@ -82,23 +86,38 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     );
   }
 
-  async uploadImages(paths: readonly string[], signal: AbortSignal): Promise<void> {
+  async uploadImages(
+    paths: readonly string[],
+    signal: AbortSignal,
+    onProgress?: (completed: number, total: number) => void,
+  ): Promise<void> {
     if (!paths.length) throw new Error('没有可上传的图文图片。');
-    const session = this.requireSession();
-    const document = await session.send<{ root: { nodeId: number } }>('DOM.getDocument', { depth: 2, pierce: true });
-    const input = await session.send<{ nodeId: number }>('DOM.querySelector', {
-      nodeId: document.root.nodeId,
-      selector: imagePostBrowserProfile(this.destination).fileInputSelector,
-    });
-    if (!input.nodeId) throw new Error('后台图片上传控件已变化，Ailu 已停止填写。');
-    if (signal.aborted) throw abortError();
-    await session.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [...paths] });
-    const appeared = await waitForUploadedImageCount(
-      async () => (await this.snapshot(signal)).uploadedImageCount,
-      async () => delay(500, signal),
-      paths.length,
-    );
-    if (!appeared) throw new Error('后台图片上传等待超时，请在保留的页面中检查已上传内容。');
+    const initialCount = (await this.snapshot(signal)).uploadedImageCount;
+    for (let index = 0; index < paths.length; index += 1) {
+      const session = this.requireSession();
+      const document = await session.send<{ root: { nodeId: number } }>('DOM.getDocument', { depth: 2, pierce: true });
+      const input = await session.send<{ nodeId: number }>('DOM.querySelector', {
+        nodeId: document.root.nodeId,
+        selector: imagePostBrowserProfile(this.destination).fileInputSelector,
+      });
+      if (!input.nodeId) throw new Error('后台图片上传控件已变化，Ailu 已停止填写。');
+      if (signal.aborted) throw abortError();
+      await session.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [paths[index]] });
+      const expected = initialCount + index + 1;
+      const appeared = await waitForStableUploadedImageCount(
+        async () => (await this.snapshot(signal)).uploadedImageCount,
+        async () => delay(500, signal),
+        expected,
+      );
+      if (!appeared) {
+        throw new Error(`第 ${index + 1}/${paths.length} 张图片上传等待超时，请在保留的页面中核对。`);
+      }
+      onProgress?.(index + 1, paths.length);
+    }
+    const finalCount = (await this.snapshot(signal)).uploadedImageCount;
+    if (finalCount !== initialCount + paths.length) {
+      throw new Error(`后台图片数量核对失败：预计新增 ${paths.length} 张，实际新增 ${Math.max(0, finalCount - initialCount)} 张。`);
+    }
   }
 
   async fillTitle(title: string, signal: AbortSignal): Promise<void> {
@@ -152,7 +171,7 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     } catch {
       throw new Error('微信贴图后台返回了无法识别的页面地址。');
     }
-    const point = await this.evaluate<{ x: number; y: number } | null>(`(async () => {
+    const readPoint = (): Promise<{ x: number; y: number } | null> => this.evaluate(`(async () => {
       const wanted = ${JSON.stringify(WECHAT_IMAGE_COMPOSER_LABELS)};
       const element = [...document.querySelectorAll(${JSON.stringify(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR)})]
         .find(node => wanted.some(label => (node.textContent || '').trim().includes(label)));
@@ -167,6 +186,10 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
         || rect.left >= viewportWidth || rect.top >= viewportHeight) return null;
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);
+    const point = await waitForWechatImageComposerEntryPoint(
+      readPoint,
+      async () => delay(500, signal),
+    );
     if (!point) return;
     const session = this.requireSession();
     await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
@@ -278,7 +301,7 @@ export function classifyImagePostComposerSnapshot(snapshot: {
 export async function waitForImagePostComposerState(
   readState: () => Promise<ImagePostComposerState>,
   wait: () => Promise<void>,
-  attempts = 20,
+  attempts = 120,
 ): Promise<ImagePostComposerState> {
   let state = await readState();
   for (let attempt = 1; state === 'page-changed' && attempt < attempts; attempt += 1) {
@@ -300,6 +323,36 @@ export async function waitForUploadedImageCount(
     count = await readCount();
   }
   return count >= expectedCount;
+}
+
+export async function waitForStableUploadedImageCount(
+  readCount: () => Promise<number>,
+  wait: () => Promise<void>,
+  expectedCount: number,
+  attempts = 40,
+  stableReads = 4,
+): Promise<boolean> {
+  let consecutive = 0;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const count = await readCount();
+    consecutive = count >= expectedCount ? consecutive + 1 : 0;
+    if (consecutive >= stableReads) return true;
+    if (attempt + 1 < attempts) await wait();
+  }
+  return false;
+}
+
+export async function waitForWechatImageComposerEntryPoint(
+  readPoint: () => Promise<{ x: number; y: number } | null>,
+  wait: () => Promise<void>,
+  attempts = 20,
+): Promise<{ x: number; y: number } | null> {
+  let point = await readPoint();
+  for (let attempt = 1; !point && attempt < attempts; attempt += 1) {
+    await wait();
+    point = await readPoint();
+  }
+  return point;
 }
 
 export class DedicatedChromeController {
@@ -454,6 +507,7 @@ export class CdpSession {
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
   }>();
+  private closed = false;
 
   private constructor(
     private readonly socket: WebSocket,
@@ -470,12 +524,14 @@ export class CdpSession {
       else pending.resolve(message.result);
     });
     socket.addEventListener('close', () => {
+      this.closed = true;
       for (const pending of this.pending.values()) {
         clearTimeout(pending.timer);
         pending.reject(new Error('专用 Chrome 连接已断开。'));
       }
       this.pending.clear();
     });
+    socket.addEventListener('error', () => { this.closed = true; });
   }
 
   static connect(
@@ -510,10 +566,13 @@ export class CdpSession {
   }
 
   send<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    if (this.closed) return Promise.reject(new Error('专用 Chrome 连接已断开。'));
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         if (!this.pending.delete(id)) return;
+        this.closed = true;
+        this.socket.close();
         reject(new Error(`专用 Chrome 调用超时：${method}`));
       }, this.commandTimeoutMs);
       this.pending.set(id, { resolve: value => resolve(value as T), reject, timer });
@@ -525,6 +584,22 @@ export class CdpSession {
         reject(error instanceof Error ? error : new Error('专用 Chrome 调用失败。'));
       }
     });
+  }
+
+  async isHealthy(): Promise<boolean> {
+    if (this.closed) return false;
+    try {
+      await this.send('Runtime.evaluate', { expression: '1', returnByValue: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.socket.close();
   }
 }
 

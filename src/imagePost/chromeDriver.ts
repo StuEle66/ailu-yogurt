@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { readFile, mkdir } from 'node:fs/promises';
+import { request as requestHttp } from 'node:http';
 import path from 'node:path';
 
 import type {
@@ -207,9 +208,11 @@ export class DedicatedChromeController {
 
   async openPage(url: string, signal: AbortSignal): Promise<CdpSession> {
     await this.ensureEndpoint(signal);
-    const response = await fetch(`${this.endpoint}/json/new?${encodeURIComponent(url)}`, { method: 'PUT', signal });
-    if (!response.ok) throw new Error(`专用 Chrome 无法创建编辑页（${response.status}）。`);
-    const target = await response.json() as { webSocketDebuggerUrl?: string };
+    const response = await requestLocalChrome(`${this.endpoint}/json/new?${encodeURIComponent(url)}`, 'PUT', signal);
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`专用 Chrome 无法创建编辑页（${response.status}）。`);
+    }
+    const target = JSON.parse(response.body) as { webSocketDebuggerUrl?: string };
     if (!target.webSocketDebuggerUrl) throw new Error('专用 Chrome 没有返回可控制的编辑页。');
     return CdpSession.connect(target.webSocketDebuggerUrl, signal);
   }
@@ -298,8 +301,53 @@ async function readActivePort(filePath: string): Promise<string | null> {
 }
 
 async function endpointAvailable(endpoint: string): Promise<boolean> {
-  try { return (await fetch(`${endpoint}/json/version`)).ok; }
+  try {
+    const response = await requestLocalChrome(`${endpoint}/json/version`, 'GET', AbortSignal.timeout(2_000));
+    return response.status >= 200 && response.status < 300;
+  }
   catch { return false; }
+}
+
+function requestLocalChrome(
+  target: string,
+  method: 'GET' | 'PUT',
+  signal: AbortSignal,
+): Promise<{ status: number; body: string }> {
+  const url = new URL(target);
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.username || url.password) {
+    return Promise.reject(new Error('专用 Chrome 仅允许使用本机调试端口。'));
+  }
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (action: () => void): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', abort);
+      action();
+    };
+    const abort = (): void => { chromeRequest.destroy(abortError()); };
+    const chromeRequest = requestHttp(url, { method, headers: { accept: 'application/json' } }, response => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      response.on('data', (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > 1024 * 1024) {
+          chromeRequest.destroy(new Error('专用 Chrome 返回的数据异常过大。'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on('end', () => finish(() => resolve({
+        status: response.statusCode || 0,
+        body: Buffer.concat(chunks).toString('utf8'),
+      })));
+    });
+    chromeRequest.setTimeout(5_000, () => chromeRequest.destroy(new Error('专用 Chrome 本机连接超时。')));
+    chromeRequest.on('error', error => finish(() => reject(error)));
+    signal.addEventListener('abort', abort, { once: true });
+    chromeRequest.end();
+  });
 }
 
 function abortError(): Error {

@@ -19,4 +19,13 @@ describe('image post Chrome driver', () => {
     expect(source).not.toContain('clickPublish');
     expect(source).not.toContain('正式发布');
   });
+
+  it('enables the dedicated Chrome driver for Xiaohongshu first', () => {
+    const main = fs.readFileSync(
+      fileURLToPath(new URL('../src/studioMain.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(main).toContain("new DedicatedChromeImagePostDriver('rednote', imagePostChrome)");
+    expect(main).toContain("new UnavailableImagePostBrowserDriver('微信贴图后台填充尚未启用。')");
+  });
 });

@@ -45,6 +45,7 @@ import {
   ImagePostHandoffCoordinator,
   UnavailableImagePostBrowserDriver,
 } from './imagePost';
+import { DedicatedChromeController, DedicatedChromeImagePostDriver } from './imagePost/chromeDriver';
 import { ImagePostWorkspaceController } from './imagePost/controller';
 import { durableRuntimeFingerprint } from './storage/runtimeSnapshot';
 import { appendLocalLog } from './storage/localLog';
@@ -145,10 +146,13 @@ export default class AiluPlugin extends Plugin {
     const vaultBasePath = getVaultBasePath(this.app);
     const supportsPhysicalWriter = process.platform !== 'win32' && Boolean(vaultBasePath);
     const writableVaultBasePath = supportsPhysicalWriter ? vaultBasePath : null;
+    const imagePostChrome = new DedicatedChromeController(
+      path.join(ailuHome(), 'browser-profiles', 'image-post'),
+    );
     this.imagePostWorkspace = new ImagePostWorkspaceController(
       path.join(ailuHome(), 'image-post'),
       new ImagePostHandoffCoordinator([
-        createXiaohongshuImagePostAdapter(new UnavailableImagePostBrowserDriver('小红书后台填充尚未启用。')),
+        createXiaohongshuImagePostAdapter(new DedicatedChromeImagePostDriver('rednote', imagePostChrome)),
         createWechatImagePostAdapter(new UnavailableImagePostBrowserDriver('微信贴图后台填充尚未启用。')),
       ]),
     );

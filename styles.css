@@ -9214,7 +9214,9 @@ button.ailu-feishu-destination-tree-main:focus-visible {
 .ailu-image-post-handoff {
   position: sticky;
   bottom: 0;
-  justify-content: space-between;
+  display: grid;
+  align-items: stretch;
+  gap: 8px;
   padding: 10px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 10px;
@@ -9223,8 +9225,35 @@ button.ailu-feishu-destination-tree-main:focus-visible {
   z-index: 3;
 }
 
+.ailu-image-post-handoff-actions,
+.ailu-image-post-destination-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ailu-image-post-handoff-actions > button {
+  flex: 1 1 0;
+}
+
+.ailu-image-post-destination-status {
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+}
+
+.ailu-image-post-destination-status.is-failed,
+.ailu-image-post-destination-status.is-attention {
+  color: var(--text-error);
+  background: color-mix(in srgb, var(--background-modifier-error) 12%, var(--background-primary));
+}
+
 @media (max-width: 620px) {
   .ailu-image-post-copy-fields { grid-template-columns: 1fr; }
   .ailu-image-post-handoff { align-items: stretch; flex-direction: column; }
+  .ailu-image-post-handoff-actions { display: grid; grid-template-columns: 1fr; }
   .ailu-image-post-composer-header { align-items: flex-start; flex-direction: column; }
 }

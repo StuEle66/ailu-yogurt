@@ -51,6 +51,12 @@ interface MaterialPreviewState {
   message: string;
 }
 
+interface DestinationRunState {
+  status: 'idle' | 'running' | 'succeeded' | 'attention' | 'failed' | 'cancelled';
+  message: string;
+  abort: AbortController | null;
+}
+
 export class ImagePostPublishingPanel {
   private readonly cards: RedNotePublishingPanel | null;
   private readonly previewStore: ManagedImagePostPreviewStore;
@@ -60,10 +66,11 @@ export class ImagePostPublishingPanel {
   private busy = false;
   private error = '';
   private status = '';
-  private includeRedNote = true;
-  private includeWechat = true;
+  private readonly destinationRuns: Record<ImagePostDestination, DestinationRunState> = {
+    rednote: { status: 'idle', message: '', abort: null },
+    'wechat-image': { status: 'idle', message: '', abort: null },
+  };
   private disposed = false;
-  private handoffAbort: AbortController | null = null;
 
   constructor(private readonly deps: ImagePostPublishingPanelDeps) {
     this.previewStore = new ManagedImagePostPreviewStore({
@@ -79,10 +86,18 @@ export class ImagePostPublishingPanel {
     }) : null;
   }
 
-  isBusy(): boolean { return this.busy || Boolean(this.cards?.isBusy()); }
+  isBusy(): boolean {
+    return this.busy
+      || Boolean(this.cards?.isBusy())
+      || Object.values(this.destinationRuns).some(run => run.status === 'running');
+  }
   activity() {
-    if (this.isBusy()) return runningPublishingTargetActivity(this.status || '正在准备图文');
-    if (this.error) return attentionPublishingTargetActivity('图文需要检查');
+    const running = Object.values(this.destinationRuns).find(run => run.status === 'running');
+    if (running) return runningPublishingTargetActivity(running.message || '正在准备图文');
+    if (this.busy || this.cards?.isBusy()) return runningPublishingTargetActivity(this.status || '正在准备图文');
+    if (this.error || Object.values(this.destinationRuns).some(run => run.status === 'failed' || run.status === 'attention')) {
+      return attentionPublishingTargetActivity('图文需要检查');
+    }
     return IDLE_PUBLISHING_TARGET_ACTIVITY;
   }
   activate(): void {
@@ -94,6 +109,7 @@ export class ImagePostPublishingPanel {
     this.disposed = true;
     this.previewStore.dispose();
     this.materialPreviews.clear();
+    for (const run of Object.values(this.destinationRuns)) run.abort?.abort();
     this.cards?.dispose();
   }
 
@@ -285,22 +301,49 @@ export class ImagePostPublishingPanel {
 
   private renderDestinations(parent: HTMLElement, draft: ImagePostDraft): void {
     const footer = parent.createDiv({ cls: 'ailu-image-post-handoff' });
-    const choices = footer.createDiv({ cls: 'ailu-image-post-destinations' });
-    this.destinationToggle(choices, '小红书', this.includeRedNote, value => { this.includeRedNote = value; });
-    this.destinationToggle(choices, '微信贴图', this.includeWechat, value => { this.includeWechat = value; });
-    const handoff = footer.createEl('button', { cls: 'mod-cta', text: '填入所选后台', attr: { type: 'button' } });
-    handoff.disabled = this.busy || !draft.materials.length || (!this.includeRedNote && !this.includeWechat);
-    handoff.onclick = () => void this.handoff();
-    if (this.handoffAbort) {
-      const stop = footer.createEl('button', { text: '停止填写', attr: { type: 'button' } });
-      stop.onclick = () => this.handoffAbort?.abort();
+    const actions = footer.createDiv({ cls: 'ailu-image-post-handoff-actions' });
+    this.handoffButton(actions, draft, '填入小红书', ['rednote']);
+    this.handoffButton(actions, draft, '填入微信贴图', ['wechat-image']);
+    this.handoffButton(actions, draft, '双平台填入', ['rednote', 'wechat-image'], true);
+    for (const destination of ['rednote', 'wechat-image'] as const) {
+      const run = this.destinationRuns[destination];
+      if (run.status === 'idle' || !run.message) continue;
+      const row = footer.createDiv({
+        cls: `ailu-image-post-destination-status is-${run.status}`,
+      });
+      row.createSpan({ text: `${destinationName(destination)}：${run.message}` });
+      if (run.status === 'running') {
+        const stop = row.createEl('button', {
+          text: '停止',
+          attr: { type: 'button', 'aria-label': `停止${destinationName(destination)}填写` },
+        });
+        stop.onclick = () => run.abort?.abort();
+      } else if (run.status === 'failed') {
+        const retry = row.createEl('button', {
+          text: '重试',
+          attr: { type: 'button', 'aria-label': `重试${destinationName(destination)}填写` },
+        });
+        retry.onclick = () => void this.handoffDestinations([destination]);
+      }
     }
   }
 
-  private destinationToggle(parent: HTMLElement, label: string, checked: boolean, change: (value: boolean) => void): void {
-    const row = parent.createEl('label');
-    const input = row.createEl('input', { type: 'checkbox' }); input.checked = checked;
-    row.createSpan({ text: label }); input.onchange = () => change(input.checked);
+  private handoffButton(
+    parent: HTMLElement,
+    draft: ImagePostDraft,
+    label: string,
+    destinations: readonly ImagePostDestination[],
+    primary = false,
+  ): void {
+    const button = parent.createEl('button', {
+      cls: primary ? 'mod-cta' : undefined,
+      text: label,
+      attr: { type: 'button' },
+    });
+    button.disabled = this.busy
+      || !draft.materials.length
+      || destinations.some(destination => this.destinationRuns[destination].status === 'running');
+    button.onclick = () => void this.handoffDestinations(destinations);
   }
 
   private async choosePhotos(): Promise<void> {
@@ -403,21 +446,55 @@ export class ImagePostPublishingPanel {
     finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
   }
 
-  private async handoff(): Promise<void> {
-    if (!this.draft || this.busy) return;
-    const destinations: ImagePostDestination[] = [];
-    if (this.includeRedNote) destinations.push('rednote');
-    if (this.includeWechat) destinations.push('wechat-image');
-    this.busy = true; this.status = '正在打开专用 Chrome 并填入内容…'; this.error = ''; this.deps.requestRender();
-    this.handoffAbort = new AbortController();
+  private async handoffDestinations(destinations: readonly ImagePostDestination[]): Promise<void> {
+    await Promise.all(destinations.map(destination => this.handoffDestination(destination)));
+  }
+
+  private async handoffDestination(destination: ImagePostDestination): Promise<void> {
+    if (!this.draft || this.busy || this.destinationRuns[destination].status === 'running') return;
+    const abort = new AbortController();
+    this.destinationRuns[destination] = {
+      status: 'running',
+      message: `正在打开${destinationName(destination)}后台…`,
+      abort,
+    };
+    this.error = '';
+    this.deps.requestRender();
     try {
-      const prepared = prepareImagePost(this.draft, destinations);
-      const results = await this.deps.workspace.handoff(prepared, this.handoffAbort.signal);
-      const outcomes = Object.values(results).flatMap(result => Object.values(result.outcomes));
-      this.status = outcomes.map(outcome => outcome?.message).filter(Boolean).join('；') || '后台填写已完成，请在 Chrome 中检查。';
-      new Notice(this.status, 10_000);
-    } catch (error) { this.error = error instanceof Error ? error.message : '图文后台填写失败。'; new Notice(this.error, 10_000); }
-    finally { this.handoffAbort = null; this.busy = false; if (!this.disposed) this.deps.requestRender(); }
+      const prepared = prepareImagePost(this.draft, [destination]);
+      const results = await this.deps.workspace.handoff(prepared, {
+        signal: abort.signal,
+        onProgress: progress => {
+          const active = this.destinationRuns[destination];
+          if (active.abort !== abort) return;
+          this.destinationRuns[destination] = { ...active, message: progress.message };
+          if (!this.disposed) this.deps.requestRender();
+        },
+      });
+      const outcome = results[destination]?.outcomes[destination];
+      const message = outcome?.message || `${destinationName(destination)}后台填写结束，请在 Chrome 中检查。`;
+      const status = outcome?.status === 'editor-filled'
+        ? 'succeeded'
+        : outcome?.status === 'attention-required'
+          ? 'attention'
+          : outcome?.status === 'cancelled'
+            ? 'cancelled'
+            : 'failed';
+      this.destinationRuns[destination] = { status, message, abort: null };
+      new Notice(message, 10_000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${destinationName(destination)}后台填写失败。`;
+      this.destinationRuns[destination] = {
+        status: abort.signal.aborted ? 'cancelled' : 'failed',
+        message,
+        abort: null,
+      };
+      new Notice(message, 10_000);
+    } finally {
+      const active = this.destinationRuns[destination];
+      if (active.abort === abort) this.destinationRuns[destination] = { ...active, abort: null };
+      if (!this.disposed) this.deps.requestRender();
+    }
   }
 
   private materialButton(parent: HTMLElement, icon: string, label: string, action: () => void, disabled = false): void {
@@ -488,6 +565,10 @@ class ImagePostMaterialPreviewModal extends Modal {
     next.disabled = this.index === this.entries.length - 1;
     next.onclick = () => { this.index += 1; this.renderPreview(); };
   }
+}
+
+function destinationName(destination: ImagePostDestination): string {
+  return destination === 'rednote' ? '小红书' : '微信贴图';
 }
 
 async function imageDimensions(file: File): Promise<{ width: number; height: number }> {

@@ -9,6 +9,65 @@ import {
 import { handoffPreparedImagePost } from '../src/imagePost/workspaceService';
 
 describe('image post workspace service', () => {
+  it('starts WeChat without waiting for a stalled Xiaohongshu handoff', async () => {
+    const draft = createImagePostDraft({ id: 'draft_parallel', source: null });
+    draft.materials = [
+      { id: 'a', kind: 'photo', fileName: 'a.png', originalName: 'a.png', contentHash: 'a'.repeat(64), width: 900, height: 1200, managedPath: '/managed/a.png', mimeType: 'image/png' },
+    ];
+    draft.leadMaterialId = 'a';
+    const prepared = prepareImagePost(draft, ['rednote', 'wechat-image']);
+    const calls: string[] = [];
+    let releaseRedNote!: () => void;
+    const redNoteGate = new Promise<void>(resolve => { releaseRedNote = resolve; });
+    const coordinator = {
+      async handoff(_input: unknown, destinations: readonly string[]) {
+        const destination = destinations[0];
+        calls.push(destination);
+        if (destination === 'rednote') await redNoteGate;
+        return { preparedId: prepared.contentHash, outcomes: {} };
+      },
+    };
+
+    const operation = handoffPreparedImagePost(prepared, coordinator);
+    try {
+      await Promise.resolve();
+      expect(calls).toEqual(['rednote', 'wechat-image']);
+    } finally {
+      releaseRedNote();
+      await operation;
+    }
+  });
+
+  it('returns the WeChat outcome when Xiaohongshu fails independently', async () => {
+    const draft = createImagePostDraft({ id: 'draft_partial', source: null });
+    draft.materials = [
+      { id: 'a', kind: 'photo', fileName: 'a.png', originalName: 'a.png', contentHash: 'a'.repeat(64), width: 900, height: 1200, managedPath: '/managed/a.png', mimeType: 'image/png' },
+    ];
+    draft.leadMaterialId = 'a';
+    const prepared = prepareImagePost(draft, ['rednote', 'wechat-image']);
+    const coordinator = {
+      async handoff(_input: unknown, destinations: readonly string[]) {
+        if (destinations[0] === 'rednote') throw new Error('小红书窗口失联');
+        return {
+          preparedId: prepared.contentHash,
+          outcomes: {
+            'wechat-image': {
+              destination: 'wechat-image' as const,
+              status: 'editor-filled' as const,
+              reason: null,
+              message: '微信完成',
+            },
+          },
+        };
+      },
+    };
+
+    await expect(handoffPreparedImagePost(prepared, coordinator)).resolves.toMatchObject({
+      rednote: { outcomes: { rednote: { status: 'failed' } } },
+      'wechat-image': { outcomes: { 'wechat-image': { status: 'editor-filled' } } },
+    });
+  });
+
   it('maps each destination copy and the frozen material order to its adapter', async () => {
     let draft = createImagePostDraft({
       id: 'draft_1',

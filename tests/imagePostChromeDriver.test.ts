@@ -9,11 +9,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   classifyImagePostComposerSnapshot,
+  CdpSession,
   DedicatedChromeController,
   imagePostBrowserProfile,
   selectWechatImageComposerTarget,
   selectExistingImagePostTarget,
   waitForImagePostComposerState,
+  waitForUploadedImageCount,
   WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR,
   WECHAT_IMAGE_COMPOSER_LABELS,
 } from '../src/imagePost/chromeDriver';
@@ -23,6 +25,40 @@ afterEach(() => {
 });
 
 describe('image post Chrome driver', () => {
+  it('ends a CDP command that never returns instead of staying busy forever', async () => {
+    class SilentWebSocket extends EventTarget {
+      constructor(_url: string) {
+        super();
+        queueMicrotask(() => this.dispatchEvent(new Event('open')));
+      }
+      close(): void {}
+      send(_payload: string): void {}
+    }
+    vi.stubGlobal('WebSocket', SilentWebSocket);
+    const session = await CdpSession.connect(
+      'ws://127.0.0.1/devtools/page/test',
+      new AbortController().signal,
+      { connectTimeoutMs: 50, commandTimeoutMs: 20 },
+    );
+
+    await expect(session.send('Runtime.evaluate')).rejects.toThrow('Chrome 调用超时');
+  });
+
+  it('ends a WebSocket connection attempt that never opens', async () => {
+    class NeverOpeningWebSocket extends EventTarget {
+      constructor(_url: string) { super(); }
+      close(): void {}
+      send(_payload: string): void {}
+    }
+    vi.stubGlobal('WebSocket', NeverOpeningWebSocket);
+
+    await expect(CdpSession.connect(
+      'ws://127.0.0.1/devtools/page/test',
+      new AbortController().signal,
+      { connectTimeoutMs: 20, commandTimeoutMs: 50 },
+    )).rejects.toThrow('连接专用 Chrome 超时');
+  });
+
   it('opens the image editors in a dedicated profile and exposes no final-publish action', () => {
     expect(imagePostBrowserProfile('rednote').editorUrl).toContain('target=image');
     expect(imagePostBrowserProfile('wechat-image').editorUrl).toBe('https://mp.weixin.qq.com/');
@@ -79,6 +115,20 @@ describe('image post Chrome driver', () => {
       async () => states[Math.min(reads++, states.length - 1)],
       async () => { waits += 1; },
     )).resolves.toBe('empty');
+    expect(reads).toBe(3);
+    expect(waits).toBe(2);
+  });
+
+  it('polls until every selected image appears in the backend editor', async () => {
+    const counts = [0, 1, 2];
+    let reads = 0;
+    let waits = 0;
+
+    await expect(waitForUploadedImageCount(
+      async () => counts[Math.min(reads++, counts.length - 1)],
+      async () => { waits += 1; },
+      2,
+    )).resolves.toBe(true);
     expect(reads).toBe(3);
     expect(waits).toBe(2);
   });

@@ -13,7 +13,11 @@ import {
   type ImportRenderedImagePostCardInput,
   type PreparedImagePost,
 } from './index';
-import { handoffPreparedImagePost, type ImagePostHandoffCoordinatorLike } from './workspaceService';
+import {
+  handoffPreparedImagePost,
+  type ImagePostHandoffCoordinatorLike,
+  type ImagePostHandoffOptions,
+} from './workspaceService';
 
 const nodeFileSystem = {
   mkdir: async (directory: string): Promise<void> => { await mkdir(directory, { recursive: true }); },
@@ -70,9 +74,9 @@ export class ImagePostWorkspaceController {
     return this.assets.readMaterial(material);
   }
 
-  async handoff(prepared: PreparedImagePost, signal?: AbortSignal) {
+  async handoff(prepared: PreparedImagePost, options: ImagePostHandoffOptions = {}) {
     await Promise.all(prepared.materials.map(material => this.assets.readMaterial(material)));
-    return await handoffPreparedImagePost(prepared, this.coordinator, signal);
+    return await handoffPreparedImagePost(prepared, this.coordinator, options);
   }
 }
 

@@ -66,6 +66,22 @@ export interface ImagePostBrowserDriver {
 
 export interface PrepareImagePostEditorOptions {
   readonly signal?: AbortSignal;
+  readonly onProgress?: (progress: ImagePostAdapterProgress) => void;
+  readonly taskTimeoutMs?: number;
+}
+
+export interface ImagePostAdapterProgress {
+  readonly destination: ImagePostDestination;
+  readonly stage:
+    | 'opening'
+    | 'waiting-login'
+    | 'uploading'
+    | 'filling-title'
+    | 'filling-body'
+    | 'filling-topics'
+    | 'verifying'
+    | 'completed';
+  readonly message: string;
 }
 
 export interface ImagePostDestinationAdapter {

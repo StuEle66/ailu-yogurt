@@ -82,6 +82,19 @@ class FailingBrowserDriver extends RecordingBrowserDriver {
   }
 }
 
+class BlockingOpenBrowserDriver extends RecordingBrowserDriver {
+  override async openEditor(
+    _destination: 'rednote' | 'wechat-image',
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await new Promise<void>((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(
+        signal.reason instanceof Error ? signal.reason : new Error('aborted'),
+      ), { once: true });
+    });
+  }
+}
+
 class BlockingBrowserDriver extends RecordingBrowserDriver {
   private releaseUpload!: () => void;
   private readonly uploadGate = new Promise<void>(resolve => {
@@ -141,6 +154,25 @@ describe('image post browser adapters', () => {
       'body:这是已经冻结的发布文案。',
       'topics:研究生日常,AI工具',
       'verify',
+    ]);
+  });
+
+  test('reports platform-specific progress through editor preparation', async () => {
+    const adapter = createWechatImagePostAdapter(new RecordingBrowserDriver());
+    const stages: string[] = [];
+
+    await adapter.prepareEditor(POST, {
+      onProgress: progress => stages.push(`${progress.destination}:${progress.stage}`),
+    });
+
+    expect(stages).toEqual([
+      'wechat-image:opening',
+      'wechat-image:uploading',
+      'wechat-image:filling-title',
+      'wechat-image:filling-body',
+      'wechat-image:filling-topics',
+      'wechat-image:verifying',
+      'wechat-image:completed',
     ]);
   });
 
@@ -212,6 +244,17 @@ describe('image post browser adapters', () => {
       status: 'failed',
       reason: 'browser-failure',
       message: '小红书浏览器操作失败，请查看本地诊断日志。',
+    });
+  });
+
+  test('ends a platform task at its deadline before any upload starts', async () => {
+    const adapter = createWechatImagePostAdapter(new BlockingOpenBrowserDriver());
+
+    await expect(adapter.prepareEditor(POST, { taskTimeoutMs: 20 })).resolves.toEqual({
+      destination: 'wechat-image',
+      status: 'failed',
+      reason: 'browser-failure',
+      message: '微信贴图后台填写超时，尚未上传图片，可以安全重试。',
     });
   });
 

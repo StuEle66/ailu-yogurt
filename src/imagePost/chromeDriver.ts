@@ -93,7 +93,12 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     if (!input.nodeId) throw new Error('后台图片上传控件已变化，Ailu 已停止填写。');
     if (signal.aborted) throw abortError();
     await session.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [...paths] });
-    await delay(2_000, signal);
+    const appeared = await waitForUploadedImageCount(
+      async () => (await this.snapshot(signal)).uploadedImageCount,
+      async () => delay(500, signal),
+      paths.length,
+    );
+    if (!appeared) throw new Error('后台图片上传等待超时，请在保留的页面中检查已上传内容。');
   }
 
   async fillTitle(title: string, signal: AbortSignal): Promise<void> {
@@ -141,7 +146,12 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
 
   private async openWechatImageComposerIfAvailable(signal: AbortSignal): Promise<void> {
     const snapshot = await this.snapshot(signal);
-    if (/扫码登录|登录公众平台/u.test(snapshot.text) || snapshot.fileInputCount > 0) return;
+    if (/扫码登录|登录公众平台/u.test(snapshot.text)) return;
+    try {
+      if (isWechatImageComposerUrl(new URL(snapshot.url))) return;
+    } catch {
+      throw new Error('微信贴图后台返回了无法识别的页面地址。');
+    }
     const point = await this.evaluate<{ x: number; y: number } | null>(`(() => {
       const wanted = ${JSON.stringify(WECHAT_IMAGE_COMPOSER_LABELS)};
       const element = [...document.querySelectorAll(${JSON.stringify(WECHAT_IMAGE_COMPOSER_ENTRY_SELECTOR)})]
@@ -271,8 +281,23 @@ export async function waitForImagePostComposerState(
   return state;
 }
 
+export async function waitForUploadedImageCount(
+  readCount: () => Promise<number>,
+  wait: () => Promise<void>,
+  expectedCount: number,
+  attempts = 40,
+): Promise<boolean> {
+  let count = await readCount();
+  for (let attempt = 1; count < expectedCount && attempt < attempts; attempt += 1) {
+    await wait();
+    count = await readCount();
+  }
+  return count >= expectedCount;
+}
+
 export class DedicatedChromeController {
   private endpoint = '';
+  private endpointPromise: Promise<void> | null = null;
 
   constructor(
     private readonly profileDirectory: string,
@@ -312,6 +337,14 @@ export class DedicatedChromeController {
   }
 
   private async ensureEndpoint(signal: AbortSignal): Promise<void> {
+    if (!this.endpointPromise) {
+      this.endpointPromise = this.establishEndpoint(AbortSignal.timeout(20_000))
+        .finally(() => { this.endpointPromise = null; });
+    }
+    await waitForOperation(this.endpointPromise, signal);
+  }
+
+  private async establishEndpoint(signal: AbortSignal): Promise<void> {
     if (this.endpoint && await endpointAvailable(this.endpoint)) return;
     await mkdir(this.profileDirectory, { recursive: true });
     const activePort = path.join(this.profileDirectory, 'DevToolsActivePort');
@@ -397,38 +430,74 @@ function isWechatImageComposerUrl(url: URL): boolean {
     && url.searchParams.get('type') === '77';
 }
 
-class CdpSession {
-  private nextId = 1;
-  private readonly pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
+interface CdpSessionTimeouts {
+  connectTimeoutMs: number;
+  commandTimeoutMs: number;
+}
 
-  private constructor(private readonly socket: WebSocket) {
+const DEFAULT_CDP_TIMEOUTS: CdpSessionTimeouts = Object.freeze({
+  connectTimeoutMs: 10_000,
+  commandTimeoutMs: 15_000,
+});
+
+export class CdpSession {
+  private nextId = 1;
+  private readonly pending = new Map<number, {
+    resolve(value: unknown): void;
+    reject(error: Error): void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
+
+  private constructor(
+    private readonly socket: WebSocket,
+    private readonly commandTimeoutMs: number,
+  ) {
     socket.addEventListener('message', event => {
       const message = JSON.parse(String(event.data)) as { id?: number; result?: unknown; error?: { message?: string } };
       if (!message.id) return;
       const pending = this.pending.get(message.id);
       if (!pending) return;
       this.pending.delete(message.id);
+      clearTimeout(pending.timer);
       if (message.error) pending.reject(new Error(message.error.message || 'Chrome 调用失败。'));
       else pending.resolve(message.result);
     });
     socket.addEventListener('close', () => {
-      for (const pending of this.pending.values()) pending.reject(new Error('专用 Chrome 连接已断开。'));
+      for (const pending of this.pending.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error('专用 Chrome 连接已断开。'));
+      }
       this.pending.clear();
     });
   }
 
-  static connect(url: string, signal: AbortSignal): Promise<CdpSession> {
+  static connect(
+    url: string,
+    signal: AbortSignal,
+    timeouts: CdpSessionTimeouts = DEFAULT_CDP_TIMEOUTS,
+  ): Promise<CdpSession> {
+    if (signal.aborted) return Promise.reject(abortError());
     return new Promise((resolve, reject) => {
       const socket = new WebSocket(url);
-      const abort = (): void => { socket.close(); reject(abortError()); };
+      let settled = false;
+      const finish = (action: () => void): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        signal.removeEventListener('abort', abort);
+        action();
+      };
+      const abort = (): void => finish(() => { socket.close(); reject(abortError()); });
+      const timer = setTimeout(() => finish(() => {
+        socket.close();
+        reject(new Error('连接专用 Chrome 超时。'));
+      }), timeouts.connectTimeoutMs);
       signal.addEventListener('abort', abort, { once: true });
       socket.addEventListener('open', () => {
-        signal.removeEventListener('abort', abort);
-        resolve(new CdpSession(socket));
+        finish(() => resolve(new CdpSession(socket, timeouts.commandTimeoutMs)));
       }, { once: true });
       socket.addEventListener('error', () => {
-        signal.removeEventListener('abort', abort);
-        reject(new Error('无法连接专用 Chrome。'));
+        finish(() => reject(new Error('无法连接专用 Chrome。')));
       }, { once: true });
     });
   }
@@ -436,8 +505,18 @@ class CdpSession {
   send<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: value => resolve(value as T), reject });
-      this.socket.send(JSON.stringify({ id, method, params }));
+      const timer = setTimeout(() => {
+        if (!this.pending.delete(id)) return;
+        reject(new Error(`专用 Chrome 调用超时：${method}`));
+      }, this.commandTimeoutMs);
+      this.pending.set(id, { resolve: value => resolve(value as T), reject, timer });
+      try {
+        this.socket.send(JSON.stringify({ id, method, params }));
+      } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error instanceof Error ? error : new Error('专用 Chrome 调用失败。'));
+      }
     });
   }
 }
@@ -507,5 +586,20 @@ function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(resolve, milliseconds);
     signal.addEventListener('abort', () => { clearTimeout(timer); reject(abortError()); }, { once: true });
+  });
+}
+
+function waitForOperation<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise<T>((resolve, reject) => {
+    const abort = (): void => reject(abortError());
+    signal.addEventListener('abort', abort, { once: true });
+    operation.then(
+      value => { signal.removeEventListener('abort', abort); resolve(value); },
+      error => {
+        signal.removeEventListener('abort', abort);
+        reject(error instanceof Error ? error : new Error('专用 Chrome 操作失败。'));
+      },
+    );
   });
 }

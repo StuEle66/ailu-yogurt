@@ -28,7 +28,7 @@ describe('complete onboarding documentation', () => {
     expect(readme).toContain('[《Ailu 完整安装与集成配置》](docs/COMPLETE_SETUP.md)');
     expect(readme).toContain('Ubuntu 服务器、公众号固定出口 IPv4 白名单');
     expect(readme).toContain('Chrome 登录态与 X Cookie 导入');
-    expect(readme).toContain('在 Ailu 草稿区完成的中国版飞书配置');
+    expect(readme).toContain('在 Ailu 创作台完成的中国版飞书配置');
     expect(readme).toContain('memoryctl --actor ailu version --json');
   });
 

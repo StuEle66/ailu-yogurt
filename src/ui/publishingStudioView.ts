@@ -767,7 +767,7 @@ export class PublishingStudioView extends ItemView {
         refresh.onclick = () => void this.refresh();
         const settings = actions.createEl('button', {
           cls: 'clickable-icon ailu-header-btn',
-          attr: { type: 'button', 'aria-label': '打开草稿设置' },
+          attr: { type: 'button', 'aria-label': '打开创作台设置' },
         });
         setIcon(settings, 'settings');
         settings.onclick = this.deps.openSettings;
@@ -857,7 +857,7 @@ export class PublishingStudioView extends ItemView {
     if (this.loading && !canKeepExistingPreview) {
       this.renderState(canvas, 'loader-circle', '正在生成本地预览', '读取 Markdown、图片与主题样式。', 'ailu-publishing-loading');
     } else if (!this.file) {
-      this.renderState(canvas, 'file-text', '打开一篇 Markdown', '草稿区会自动跟随当前笔记。', 'ailu-publishing-empty');
+      this.renderState(canvas, 'file-text', '打开一篇 Markdown', '创作台会自动跟随当前笔记。', 'ailu-publishing-empty');
     } else if (this.error) {
       this.renderState(canvas, 'triangle-alert', '预览生成失败', this.error, 'ailu-publishing-error');
     } else if (!this.snapshot) {
@@ -895,7 +895,7 @@ export class PublishingStudioView extends ItemView {
     const tools = parent.createDiv({ cls: 'ailu-publishing-tools' });
     const targets = tools.createDiv({
       cls: 'ailu-publishing-targets',
-      attr: { role: 'tablist', 'aria-label': '草稿目标' },
+      attr: { role: 'tablist', 'aria-label': '创作台目标' },
     });
     this.targetButtonEls.clear();
     for (const option of PUBLISHING_TARGETS) {
@@ -1714,7 +1714,7 @@ export class PublishingStudioView extends ItemView {
       return;
     }
     if (this.deps.getSettings().publishing.transport !== 'localRelay') {
-      new Notice('当前安全版本仅开放自托管公众号中转，请在草稿设置中切换。');
+      new Notice('当前安全版本仅开放自托管公众号中转，请在创作台设置中切换。');
       return;
     }
     if (!this.reserveWeChatOperation('preflight')) return;

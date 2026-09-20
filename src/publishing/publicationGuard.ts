@@ -21,7 +21,7 @@ export interface PublishingDestinationIdentity {
 
 export function normalizeSecureRelayToken(value: string): string {
   const relayToken = value.trim();
-  if (!relayToken) throw new Error('请先在草稿设置中填写中转 Token');
+  if (!relayToken) throw new Error('请先在创作台设置中填写中转 Token');
   if (!/^[A-Za-z0-9._~+/=-]+$/u.test(relayToken)) {
     throw new Error('公众号中转 Token 只能包含可安全放入 Bearer 请求头的 ASCII 字符');
   }
@@ -38,7 +38,7 @@ export function normalizeSecureRelayUrl(value: string): {
   relayHost: string;
 } {
   const relayUrl = value.trim().replace(/\/+$/g, '');
-  if (!relayUrl) throw new Error('请先在草稿设置中填写中转地址');
+  if (!relayUrl) throw new Error('请先在创作台设置中填写中转地址');
   let parsed: URL;
   try {
     parsed = new URL(relayUrl);

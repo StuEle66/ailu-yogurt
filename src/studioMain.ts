@@ -550,7 +550,7 @@ export default class AiluPlugin extends Plugin {
     });
     this.addCommand({
       id: COMMAND_IDS.openPublishing,
-      name: '打开草稿区',
+      name: '打开创作台',
       callback: () => void this.activatePublishing(),
     });
     this.addCommand({

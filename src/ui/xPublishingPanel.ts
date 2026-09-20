@@ -439,7 +439,7 @@ export class XPublishingPanel {
     });
     progress.createSpan({
       text: uploadTask?.status === 'running'
-        ? uploadTask.progressLabel || '切换到对话或其他草稿目标不会中断任务。'
+        ? uploadTask.progressLabel || '切换到对话或创作台其他目标不会中断任务。'
         : this.progressLabel || '请保持 Obsidian 打开。',
     });
   }

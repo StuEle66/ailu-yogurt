@@ -291,7 +291,7 @@ export class AiluSettingTab extends PluginSettingTab {
       { id: 'general', label: '通用' },
       { id: 'claude', label: 'Claude' },
       { id: 'codex', label: 'Codex' },
-      { id: 'publishing', label: '草稿' },
+      { id: 'publishing', label: '创作台' },
     ];
     const activate = (id: SettingsTabId, restoreFocus: boolean): void => {
       if (id === 'claude') this.ccSwitchAutoRefreshRequested = false;
@@ -450,7 +450,7 @@ export class AiluSettingTab extends PluginSettingTab {
     const section = containerEl.createDiv({ cls: 'ailu-settings-section' });
     new Setting(section)
       .setName('公众号草稿')
-      .setDesc('预览与检查完全在本机完成；只有你在草稿区确认后，才会通过中转创建草稿。')
+      .setDesc('预览与检查完全在本机完成；只有你在创作台确认后，才会通过中转创建草稿。')
       .setHeading();
 
     new Setting(section)
@@ -555,7 +555,7 @@ export class AiluSettingTab extends PluginSettingTab {
     const xSection = containerEl.createDiv({ cls: 'ailu-settings-section' });
     new Setting(xSection)
       .setName('X Article 草稿')
-      .setDesc('本地预览与 dry-run 不登录 X；只有你在草稿区确认后，才会调用现有 Skill 创建草稿。')
+      .setDesc('本地预览与 dry-run 不登录 X；只有你在创作台确认后，才会调用现有 Skill 创建草稿。')
       .setHeading();
 
     new Setting(xSection)

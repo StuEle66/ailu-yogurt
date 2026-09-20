@@ -84,7 +84,7 @@ npm run deploy:apply -- --vault "/Users/你的用户名/Documents/My Vault"
 3. 如果终端里可用、Obsidian 中却显示未安装，在 Ailu 设置里配置真实可执行文件路径。通过 Finder 启动的 Obsidian 可能看不到 nvm、fnm、asdf 或 mise 的 shell shim；同时确保该 CLI 所需的 `node` 目录也对图形应用可见。
 4. 保持“完全访问”关闭，并先打开对话框中的 `Plan`。点击左侧 Ailu 图标，或使用命令面板 `Ailu: 打开对话`，发送：`只回复 OK，不读写任何文件。`
 5. 再打开一篇普通 Markdown，发送：`只读取当前笔记并概括三点，不修改文件。` 确认标题栏运行状态、回复和本地历史都正常。
-6. 使用命令面板 `Ailu: 打开草稿区`，确认当前 Markdown 的本地预览可打开。飞书、X 和公众号属于独立的可选集成，主对话验收通过后再分别配置。
+6. 使用命令面板 `Ailu: 打开创作台`，确认当前 Markdown 的本地预览可打开。飞书、X 和公众号属于独立的可选集成，主对话验收通过后再分别配置。
 
 “完全访问”关闭不等于所有普通对话都只读：普通模式仍会把所选 CLI 限制在其受限工作区权限内；其中 Codex 当前使用 `workspace-write` 且不逐条弹出批准。需要纯只读规划时保持 `Plan` 开启，确认需求后再关闭。
 
@@ -96,7 +96,7 @@ npm run deploy:apply -- --vault "/Users/你的用户名/Documents/My Vault"
 
 1. Ubuntu 服务器、公众号固定出口 IPv4 白名单、`wechat-relay`、Tailscale Serve 或 Caddy HTTPS，以及 Ailu 中转地址和 Token；
 2. 与当前 Ailu 匹配的 `x-article-draft-uploader`、独立 Python/Playwright 环境、Chrome 登录态与 X Cookie 导入；
-3. `lark-cli` 安装，以及在 Ailu 草稿区完成的中国版飞书配置、扫码授权和目标目录选择；
+3. `lark-cli` 安装，以及在 Ailu 创作台完成的中国版飞书配置、扫码授权和目标目录选择；
 4. 可选的 Agent Memory Runtime v2 安装与 `memoryctl --actor ailu version --json` 握手。
 
 四条集成互不替代，也不应在第一次启动时一起排错。完整指南为每一步给出了成功信号、凭据边界和失败后的处理顺序。
@@ -141,7 +141,7 @@ npm run deploy:plan -- --vault "/Users/你的用户名/Documents/My Vault"
 - 只通过用户自行部署的 [`wechat-relay`](https://github.com/mcncarl/wechat-relay) 创建公众号草稿；每次都需要最终确认，并在创建后回读核验。
 - 若创建接口已返回 `media_id` 但回读失败，工作台会保留该 ID 并提示先人工核对草稿箱；端到端防重复仍要求中转服务持久化处理 `Idempotency-Key`。
 - 不包含群发和正式发布入口，Agent 也不能绕过确认直接上传。
-- 草稿区通过同一行的“公众号 / 小红书 / 飞书 / X 文章”切换目标，不增加新的侧边栏标签或 Ribbon 入口。
+- 创作台通过同一行的“公众号 / 小红书 / 飞书 / X 文章”切换目标，不增加新的侧边栏标签或 Ribbon 入口。
 - 小红书模式把当前 Markdown 生成为 3:4 图片卡片，保留 MDFlow 的模板、字体、头像、账号资料、封面、自动分页与 `---` 手动分页；支持下载当前页 PNG 和按预览顺序导出全部页面 ZIP。第一次打开会只读导入 `yogurt-mdflow` 的小红书设置，旧插件和旧设置不会被改写。
 - 飞书模式复用用户独立安装的 `lark-cli`，只申请文档创建、读取、覆盖更新、图片上传，以及云盘文件夹和知识库节点的目录只读权限；不会读取消息、日历或多维表格内容，也不会退出本机共享的飞书登录。
 - 首次创建默认放入个人文档库根目录；“更改”会只读加载云盘文件夹、个人文档库和当前账号可访问的知识库层级，用户可逐级展开并选择，不需要复制链接。该位置只影响新建文档，已关联文档仍在原位置更新并保持链接不变。本地图片按原文位置插入，每次创建或覆盖前均需确认，并在完成后回读验证。
@@ -154,7 +154,7 @@ npm run deploy:plan -- --vault "/Users/你的用户名/Documents/My Vault"
 - 桌面端 Obsidian 1.11.4 或更高版本。macOS/POSIX 支持完整写入；Windows 0.2.0 仅支持 fail-closed 只读查看。
 - 从源码构建需要 Node.js 22.13 或更高版本；核心写锁和部署要求可执行的 `/usr/bin/python3`。
 - 至少独立安装一个受支持的 Agent CLI：[Claude Code](https://code.claude.com/) 或 [Codex](https://github.com/openai/codex)。
-- 使用飞书同步时，需另行安装 [lark-cli](https://github.com/larksuite/cli)；Ailu 会在草稿区完成中国版飞书 `brand=feishu` 的配置与扫码授权，不会连接国际版 Lark。插件只发现现有 CLI，不代为安装或升级。
+- 使用飞书同步时，需另行安装 [lark-cli](https://github.com/larksuite/cli)；Ailu 会在创作台完成中国版飞书 `brand=feishu` 的配置与扫码授权，不会连接国际版 Lark。插件只发现现有 CLI，不代为安装或升级。
 - 使用 X 文章草稿时，安装已与 Ailu `0.2.0` 复核的公开 tag [`x-article-draft-uploader-v1.0.1`](https://github.com/mcncarl/yichen-skills/tree/x-article-draft-uploader-v1.0.1/yichen-x-article-draft-uploader)（commit `9f679d9f28d656eb01b60d806faa709f85173c51`），并使用该版本锁定的 Python 依赖；不要安装会继续变化的任意 `main` 快照。插件只发现和调用现有 Skill，不复制、安装或升级它。该 Skill 使用独立的个人学习与非商业协议，商业使用须事先取得作者明确书面授权，不随 Ailu 的 AGPL 许可证重新授权。
 
 插件会从用户配置的路径、`~/.ailu/runtimes/`、系统 `PATH` 与支持的桌面客户端中发现现有可执行文件，不会自动复制、安装或升级 CLI 及其依赖。托管 runtime 必须是非符号链接的真实可执行文件。Ailu 只确认可执行文件和可选版本文本，不能预先保证旧版 CLI 的协议兼容；首次使用前应在终端升级、登录并执行一次版本检查。

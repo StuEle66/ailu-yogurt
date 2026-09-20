@@ -27,7 +27,7 @@ export function renderStudioChrome(parent: HTMLElement, options: StudioChromeOpt
   });
   for (const item of [
     { id: 'chat' as const, label: '对话', icon: 'message-square' },
-    { id: 'publishing' as const, label: '草稿', icon: 'panels-top-left' },
+    { id: 'publishing' as const, label: '创作台', icon: 'panels-top-left' },
   ]) {
     const button = navigation.createEl('button', {
       cls: options.active === item.id ? 'is-active' : '',

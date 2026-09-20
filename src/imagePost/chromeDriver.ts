@@ -58,12 +58,7 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
 
   async inspectEditor(signal: AbortSignal): Promise<ImagePostComposerState> {
     const snapshot = await this.snapshot(signal);
-    if (/login|passport/u.test(snapshot.url) || /扫码登录|登录公众平台|手机验证码/u.test(snapshot.text)) {
-      return 'login-required';
-    }
-    if (/验证码|安全验证|拖动滑块|异常访问/u.test(snapshot.text)) return 'captcha-required';
-    if (!snapshot.fileInputCount || (!snapshot.hasTitle && !snapshot.hasBody)) return 'page-changed';
-    return snapshot.hasContent || snapshot.uploadedImageCount > 0 ? 'content-present' : 'empty';
+    return classifyImagePostComposerSnapshot(snapshot);
   }
 
   async uploadImages(paths: readonly string[], signal: AbortSignal): Promise<void> {
@@ -196,6 +191,27 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     if (!this.session) throw new Error('专用 Chrome 尚未打开。');
     return this.session;
   }
+}
+
+export function classifyImagePostComposerSnapshot(snapshot: {
+  url: string;
+  text: string;
+  fileInputCount: number;
+  uploadedImageCount: number;
+  hasTitle: boolean;
+  hasBody: boolean;
+  hasContent: boolean;
+}): ImagePostComposerState {
+  if (/login|passport/u.test(snapshot.url) || /扫码登录|登录公众平台|手机验证码/u.test(snapshot.text)) {
+    return 'login-required';
+  }
+  if (/验证码|安全验证|拖动滑块|异常访问/u.test(snapshot.text)) return 'captcha-required';
+  if (snapshot.fileInputCount > 0
+    && !snapshot.hasTitle
+    && !snapshot.hasBody
+    && /上传图文|上传图片/u.test(snapshot.text)) return 'empty';
+  if (!snapshot.fileInputCount || (!snapshot.hasTitle && !snapshot.hasBody)) return 'page-changed';
+  return snapshot.hasContent || snapshot.uploadedImageCount > 0 ? 'content-present' : 'empty';
 }
 
 export class DedicatedChromeController {

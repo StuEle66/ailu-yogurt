@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DedicatedChromeController, imagePostBrowserProfile } from '../src/imagePost/chromeDriver';
+import {
+  classifyImagePostComposerSnapshot,
+  DedicatedChromeController,
+  imagePostBrowserProfile,
+} from '../src/imagePost/chromeDriver';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -35,6 +39,30 @@ describe('image post Chrome driver', () => {
     );
     expect(source).toContain("'--remote-allow-origins=app://obsidian.md'");
     expect(source).not.toContain("'--remote-allow-origins=*'");
+  });
+
+  it('recognizes the logged-in Xiaohongshu image upload entry before title fields appear', () => {
+    expect(classifyImagePostComposerSnapshot({
+      url: imagePostBrowserProfile('rednote').editorUrl,
+      text: '上传图文\n上传图片\n支持 png、jpg、jpeg、webp',
+      fileInputCount: 1,
+      uploadedImageCount: 0,
+      hasTitle: false,
+      hasBody: false,
+      hasContent: false,
+    })).toBe('empty');
+  });
+
+  it('recognizes the WeChat QR login page before looking for editor controls', () => {
+    expect(classifyImagePostComposerSnapshot({
+      url: 'https://mp.weixin.qq.com/',
+      text: '微信公众平台\n使用账号登录\n扫码登录',
+      fileInputCount: 0,
+      uploadedImageCount: 0,
+      hasTitle: false,
+      hasBody: false,
+      hasContent: false,
+    })).toBe('login-required');
   });
 
   it('enables the dedicated Chrome driver for both image-post editors', () => {

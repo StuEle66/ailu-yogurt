@@ -53,6 +53,16 @@ export function imagePostBrowserProfile(destination: ImagePostDestination): Brow
   return PROFILES[destination];
 }
 
+export function planImagePostUploadBatches(
+  destination: ImagePostDestination,
+  paths: readonly string[],
+): readonly (readonly string[])[] {
+  const frozen = [...paths];
+  return destination === 'wechat-image'
+    ? [frozen]
+    : frozen.map(current => [current]);
+}
+
 export function buildWechatImageComposerUrl(homeUrl: string): string | null {
   try {
     const source = new URL(homeUrl);
@@ -110,7 +120,9 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
   ): Promise<void> {
     if (!paths.length) throw new Error('没有可上传的图文图片。');
     const initialCount = (await this.snapshot(signal)).uploadedImageCount;
-    for (let index = 0; index < paths.length; index += 1) {
+    const batches = planImagePostUploadBatches(this.destination, paths);
+    let submitted = 0;
+    for (const batch of batches) {
       const session = this.requireSession();
       const document = await session.send<{ root: { nodeId: number } }>('DOM.getDocument', { depth: 2, pierce: true });
       const input = await session.send<{ nodeId: number }>('DOM.querySelector', {
@@ -119,17 +131,22 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
       });
       if (!input.nodeId) throw new Error('后台图片上传控件已变化，Ailu 已停止填写。');
       if (signal.aborted) throw abortError();
-      await session.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [paths[index]] });
-      const expected = initialCount + index + 1;
+      await session.send('DOM.setFileInputFiles', { nodeId: input.nodeId, files: [...batch] });
+      submitted += batch.length;
+      const expected = initialCount + submitted;
       const appeared = await waitForStableUploadedImageCount(
         async () => (await this.snapshot(signal)).uploadedImageCount,
         async () => delay(500, signal),
         expected,
+        40,
+        4,
+        count => onProgress?.(Math.min(paths.length, Math.max(0, count - initialCount)), paths.length),
       );
       if (!appeared) {
-        throw new Error(`第 ${index + 1}/${paths.length} 张图片上传等待超时，请在保留的页面中核对。`);
+        const actual = Math.max(0, (await this.snapshot(signal)).uploadedImageCount - initialCount);
+        throw new Error(`后台图片上传等待超时：预计 ${paths.length} 张，当前识别 ${actual} 张，请在保留的页面中核对。`);
       }
-      onProgress?.(index + 1, paths.length);
+      onProgress?.(submitted, paths.length);
     }
     const finalCount = (await this.snapshot(signal)).uploadedImageCount;
     if (finalCount !== initialCount + paths.length) {
@@ -321,10 +338,12 @@ export async function waitForStableUploadedImageCount(
   expectedCount: number,
   attempts = 40,
   stableReads = 4,
+  onCount?: (count: number) => void,
 ): Promise<boolean> {
   let consecutive = 0;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const count = await readCount();
+    onCount?.(count);
     consecutive = count >= expectedCount ? consecutive + 1 : 0;
     if (consecutive >= stableReads) return true;
     if (attempt + 1 < attempts) await wait();

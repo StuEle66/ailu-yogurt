@@ -13,6 +13,7 @@ import {
   CdpSession,
   DedicatedChromeController,
   imagePostBrowserProfile,
+  planImagePostUploadBatches,
   selectWechatImageComposerTarget,
   selectExistingImagePostTarget,
   waitForImagePostComposerState,
@@ -34,14 +35,14 @@ describe('image post Chrome driver', () => {
     expect(buildWechatImageComposerUrl('https://mp.weixin.qq.com/')).toBeNull();
   });
 
-  it('uploads image paths one at a time and reports deterministic progress', () => {
-    const source = fs.readFileSync(
-      fileURLToPath(new URL('../src/imagePost/chromeDriver.ts', import.meta.url)),
-      'utf8',
-    );
-    expect(source).toContain('for (let index = 0; index < paths.length; index += 1)');
-    expect(source).toContain('onProgress?.(index + 1, paths.length)');
-    expect(source).not.toContain("files: [...paths]");
+  it('submits WeChat photos as one ordered multi-select batch', () => {
+    expect(planImagePostUploadBatches('wechat-image', ['/a.jpg', '/b.png', '/c.webp']))
+      .toEqual([['/a.jpg', '/b.png', '/c.webp']]);
+  });
+
+  it('keeps Xiaohongshu uploads sequential', () => {
+    expect(planImagePostUploadBatches('rednote', ['/a.jpg', '/b.png', '/c.webp']))
+      .toEqual([['/a.jpg'], ['/b.png'], ['/c.webp']]);
   });
 
   it('ends a CDP command that never returns instead of staying busy forever', async () => {

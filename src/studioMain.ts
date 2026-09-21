@@ -25,6 +25,10 @@ import { RuntimeManager } from './runtime/runtimeManager';
 import { normalizePublishingSettings } from './settings/publishingSettings';
 import { normalizeSecureRelayToken } from './publishing/publicationGuard';
 import {
+  DedicatedChromeWechatArticleDriver,
+  WechatArticleBrowserAdapter,
+} from './publishing/wechatArticleBrowserAdapter';
+import {
   canonicalizeStoredAgentSettings,
   normalizeAgentSettings,
 } from './settings/agentSettings';
@@ -141,6 +145,7 @@ export default class AiluPlugin extends Plugin {
   private readonly xArticleUploadTasks = new XArticleUploadTaskCoordinator();
   private readonly xCookieMutations = new XCookieMutationCoordinator();
   private imagePostWorkspace!: ImagePostWorkspaceController;
+  private wechatArticleBrowser!: WechatArticleBrowserAdapter;
   private legacyXCookiesPath = '';
   private canonicalXCookiesVerified = false;
 
@@ -151,6 +156,9 @@ export default class AiluPlugin extends Plugin {
     const writableVaultBasePath = supportsPhysicalWriter ? vaultBasePath : null;
     const imagePostChrome = new DedicatedChromeController(
       path.join(ailuHome(), 'browser-profiles', 'image-post'),
+    );
+    this.wechatArticleBrowser = new WechatArticleBrowserAdapter(
+      new DedicatedChromeWechatArticleDriver(imagePostChrome),
     );
     this.imagePostWorkspace = new ImagePostWorkspaceController(
       path.join(ailuHome(), 'image-post'),
@@ -553,6 +561,7 @@ export default class AiluPlugin extends Plugin {
       larkCli: this.larkCliService,
       xArticleUploadTasks: this.xArticleUploadTasks,
       imagePostWorkspace: this.imagePostWorkspace,
+      wechatArticleBrowser: this.wechatArticleBrowser,
       getSettings: () => this.settings,
       saveSettings: () => this.saveSettings(),
       authorizeXCookieMutation: () => this.assertHomeWriteFenceHeld(),

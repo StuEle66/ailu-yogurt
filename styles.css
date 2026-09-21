@@ -9466,6 +9466,20 @@ button.ailu-image-post-photo-empty {
   background: color-mix(in srgb, var(--background-modifier-error) 12%, var(--background-primary));
 }
 
+.ailu-publishing-inline-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--text-warning) 35%, var(--background-modifier-border));
+  border-radius: 8px;
+  color: var(--text-warning);
+  background: color-mix(in srgb, var(--text-warning) 8%, var(--background-primary));
+  font-size: 12px;
+}
+
 @media (max-width: 620px) {
   .ailu-image-post-copy-fields { grid-template-columns: 1fr; }
   .ailu-image-post-handoff { align-items: stretch; flex-direction: column; }

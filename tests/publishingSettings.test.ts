@@ -12,6 +12,7 @@ describe('publishing settings', () => {
     expect(normalizePublishingSettings({
       themeId: 'paper-ink',
       transport: 'localRelay',
+      transportMigrationVersion: 1,
       relayUrl: ' https://relay.example.test/ ',
       appId: ' app-id ',
       confirmBeforeUpload: true,
@@ -21,6 +22,7 @@ describe('publishing settings', () => {
       bodyFontId: 'paper-kaiti',
       bodyFontSize: 17,
       transport: 'localRelay',
+      transportMigrationVersion: 1,
       relayUrl: 'https://relay.example.test/',
       appId: 'app-id',
       confirmBeforeUpload: true,
@@ -30,7 +32,38 @@ describe('publishing settings', () => {
 
   test('rejects unsupported publishing transports', () => {
     expect(normalizePublishingSettings({ transport: 'remoteCloud' }).transport)
-      .toBe('localRelay');
+      .toBe('dedicatedChrome');
+  });
+
+  test('migrates an unconfigured legacy relay to the dedicated browser', () => {
+    expect(normalizePublishingSettings({
+      transport: 'localRelay',
+      relayUrl: '',
+      appId: '',
+    })).toMatchObject({
+      transport: 'dedicatedChrome',
+      transportMigrationVersion: 1,
+    });
+  });
+
+  test('preserves a configured legacy relay during the one-time migration', () => {
+    expect(normalizePublishingSettings({
+      transport: 'localRelay',
+      relayUrl: 'https://relay.example.test',
+      appId: 'wx-test',
+    })).toMatchObject({
+      transport: 'localRelay',
+      transportMigrationVersion: 1,
+    });
+  });
+
+  test('preserves an explicit relay choice after migration even while it is incomplete', () => {
+    expect(normalizePublishingSettings({
+      transport: 'localRelay',
+      transportMigrationVersion: 1,
+      relayUrl: '',
+      appId: '',
+    }).transport).toBe('localRelay');
   });
 
   test('migrates every unavailable theme choice to Paper Ink', () => {

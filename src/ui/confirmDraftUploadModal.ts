@@ -4,7 +4,7 @@ export interface DraftUploadConfirmation {
   title: string;
   transportLabel: string;
   accountLabel: string;
-  relayHost: string;
+  destinationLabel: string;
   imageCount: number;
   compressedImageCount: number;
   warningCount: number;
@@ -39,7 +39,7 @@ class DraftUploadConfirmModal extends Modal {
     const facts = contentEl.createDiv({ cls: 'ailu-confirm-facts' });
     this.renderFact(facts, '文章', this.summary.title || '未命名文章');
     this.renderFact(facts, '公众号 AppID', this.summary.accountLabel);
-    this.renderFact(facts, '中转目标', this.summary.relayHost);
+    this.renderFact(facts, '目标', this.summary.destinationLabel);
     this.renderFact(facts, '通道', this.summary.transportLabel);
     this.renderFact(facts, '正文图片', `${this.summary.imageCount} 张`);
     this.renderFact(facts, '需要压缩', `${this.summary.compressedImageCount} 张`);

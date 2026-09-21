@@ -63,6 +63,8 @@ import { FeishuPublishingPanel } from './feishuPublishingPanel';
 import { ImagePostPublishingPanel } from './imagePostPublishingPanel';
 import { XPublishingPanel } from './xPublishingPanel';
 import type { ImagePostWorkspaceController } from '../imagePost/controller';
+import type { WechatArticleBrowserAdapter } from '../publishing/wechatArticleBrowserAdapter';
+import type { PublishingTransportId } from '../settings/publishingSettings';
 import type { XArticleUploadTaskCoordinator } from '../xArticle/uploadTaskCoordinator';
 import {
   capturePublishingPreviewScroll,
@@ -95,6 +97,7 @@ interface PublishingStudioViewDeps {
   larkCli: LarkCliService;
   xArticleUploadTasks: XArticleUploadTaskCoordinator;
   imagePostWorkspace: ImagePostWorkspaceController;
+  wechatArticleBrowser: WechatArticleBrowserAdapter;
   getSettings: () => AiluSettings;
   saveSettings: () => Promise<void>;
   editorScrollSync: PublishingEditorScrollSync;
@@ -111,7 +114,8 @@ type Operation = 'preflight' | 'publishing' | null;
 
 interface PublicationIntent {
   identity: PublishingSourceIdentity;
-  destination: PublishingDestinationIdentity;
+  transport: PublishingTransportId;
+  destination: PublishingDestinationIdentity | null;
   relayToken: string;
   prepared: PreparedArticle;
 }
@@ -1216,6 +1220,7 @@ export class PublishingStudioView extends ItemView {
   }
 
   private renderActions(parent: HTMLElement): void {
+    this.renderPublishingConfigurationWarning(parent);
     const actions = parent.createDiv({ cls: 'ailu-publishing-actions' });
     const copy = actions.createEl('button', { text: '复制排版', attr: { type: 'button' } });
     copy.onclick = () => void this.copyPreview();
@@ -1227,6 +1232,25 @@ export class PublishingStudioView extends ItemView {
       attr: { type: 'button' },
     });
     publish.onclick = () => void this.publishDraft();
+  }
+
+  private renderPublishingConfigurationWarning(parent: HTMLElement): void {
+    const issues = this.relayConfigurationIssues();
+    if (!issues.length) return;
+    const warning = parent.createDiv({ cls: 'ailu-publishing-inline-warning' });
+    warning.createSpan({ text: `公众号中转尚未配置：${issues.join('、')}` });
+    const configure = warning.createEl('button', { text: '打开设置', attr: { type: 'button' } });
+    configure.onclick = this.deps.openSettings;
+  }
+
+  private relayConfigurationIssues(): string[] {
+    const settings = this.deps.getSettings().publishing;
+    if (settings.transport !== 'localRelay') return [];
+    const issues: string[] = [];
+    if (!settings.relayUrl.trim()) issues.push('中转地址');
+    if (!settings.appId.trim()) issues.push('公众号 AppID');
+    if (!(this.app.secretStorage.getSecret(SECRET_IDS.wechatRelayToken)?.trim())) issues.push('中转 Token');
+    return issues;
   }
 
   private renderState(
@@ -1661,11 +1685,13 @@ export class PublishingStudioView extends ItemView {
     assertPreparedArticleReady(prepared);
     const identity = this.currentPublicationIdentity();
     if (!identity) throw new Error('当前预检结果已失效，请重新检查');
-    const destination = this.currentPublicationDestination();
+    const transport = this.deps.getSettings().publishing.transport;
+    const destination = transport === 'localRelay' ? this.currentPublicationDestination() : null;
     return {
       identity,
-      destination: destination.identity,
-      relayToken: destination.relayToken,
+      transport,
+      destination: destination?.identity ?? null,
+      relayToken: destination?.relayToken ?? '',
       prepared,
     };
   }
@@ -1676,12 +1702,17 @@ export class PublishingStudioView extends ItemView {
       throw new Error('文章或排版在确认期间已变化，请重新检查并确认');
     }
     assertPublishingSourceUnchanged(intent.identity, this.currentPublicationIdentity());
+    if (this.deps.getSettings().publishing.transport !== intent.transport) {
+      throw new Error('公众号草稿通道在确认期间已变化，请重新确认');
+    }
+    if (intent.transport !== 'localRelay') return;
     let currentDestination: PublishingDestinationIdentity | null = null;
     try {
       currentDestination = this.currentPublicationDestination().identity;
     } catch {
       currentDestination = null;
     }
+    if (!intent.destination) throw new Error('公众号中转目标在确认期间已变化，请重新确认');
     assertPublishingDestinationUnchanged(intent.destination, currentDestination);
   }
 
@@ -1747,8 +1778,9 @@ export class PublishingStudioView extends ItemView {
       this.reserveWeChatOperation('preflight');
       return;
     }
-    if (this.deps.getSettings().publishing.transport !== 'localRelay') {
-      new Notice('当前安全版本仅开放自托管公众号中转，请在创作台设置中切换。');
+    const relayIssues = this.relayConfigurationIssues();
+    if (relayIssues.length) {
+      new Notice(`请先配置公众号中转：${relayIssues.join('、')}。`);
       return;
     }
     if (!this.reserveWeChatOperation('preflight')) return;
@@ -1761,9 +1793,9 @@ export class PublishingStudioView extends ItemView {
       const advisories = this.publishingAdvisories(prepared);
       const confirmed = await confirmDraftUpload(this.app, {
         title: prepared.title,
-        transportLabel: '自托管公众号中转',
-        accountLabel: maskedPublishingAppId(intent.destination.appId),
-        relayHost: intent.destination.relayHost,
+        transportLabel: intent.transport === 'dedicatedChrome' ? '专用 Chrome' : '自托管公众号中转',
+        accountLabel: intent.destination ? maskedPublishingAppId(intent.destination.appId) : 'Chrome 当前登录账号',
+        destinationLabel: intent.destination?.relayHost ?? '微信公众号长文章编辑器',
         imageCount: prepared.stats.imageCount,
         compressedImageCount: prepared.stats.compressedImageCount,
         warningCount: advisories.length,
@@ -1772,22 +1804,45 @@ export class PublishingStudioView extends ItemView {
       if (!confirmed) return;
       this.assertPublicationIntentCurrent(intent);
       this.operation = 'publishing';
-      this.statusText = `正在上传《${prepared.title}》的封面与正文图片，并创建草稿…`;
+      this.statusText = intent.transport === 'dedicatedChrome'
+        ? `正在打开公众号后台并填写《${prepared.title}》…`
+        : `正在上传《${prepared.title}》的封面与正文图片，并创建草稿…`;
       await this.renderWeChatOperationState();
       // The render above yields to Obsidian. Revalidate immediately before the
       // first network request so a file-open/modify/theme change cannot race
       // the confirmation modal and upload a stale prepared article.
       this.assertPublicationIntentCurrent(intent);
-      const transport = new LocalRelayTransport({
-        relayUrl: intent.destination.relayUrl,
-        relayToken: intent.relayToken,
-        request: request => this.relayRequest(request),
-      });
-      const result = await transport.publish(intent.prepared, {
-        idempotencyKey: intent.prepared.contentHash,
-      });
-      this.statusText = `《${prepared.title}》草稿已创建并回读验证：${result.draftMediaId}`;
-      new Notice(`《${prepared.title}》草稿已创建，${result.uploadedImageCount} 张正文图片已核验。`);
+      if (intent.transport === 'dedicatedChrome') {
+        const result = await this.deps.wechatArticleBrowser.save(intent.prepared, new AbortController().signal);
+        if (result.status === 'saved') {
+          this.statusText = `《${prepared.title}》已保存到公众号草稿箱`;
+          new Notice(`《${prepared.title}》已保存到公众号草稿箱，请在专用 Chrome 中检查。`);
+        } else if (result.status === 'login-required') {
+          this.statusText = '公众号后台需要登录；登录后请重新开始本次草稿操作';
+          new Notice(this.statusText, 0);
+        } else if (result.status === 'attention-required') {
+          this.statusText = result.reason === 'save-uncertain'
+            ? '公众号后台已执行保存，但结果无法确认；请先检查草稿箱，勿直接重试'
+            : result.reason === 'verification-failed'
+              ? '公众号后台内容核对未通过，未执行保存；请检查保留的编辑页'
+              : '公众号后台页面结构发生变化，未执行保存';
+          new Notice(this.statusText, 0);
+        } else {
+          throw new Error(result.reason);
+        }
+      } else {
+        if (!intent.destination) throw new Error('公众号中转目标缺失');
+        const transport = new LocalRelayTransport({
+          relayUrl: intent.destination.relayUrl,
+          relayToken: intent.relayToken,
+          request: request => this.relayRequest(request),
+        });
+        const result = await transport.publish(intent.prepared, {
+          idempotencyKey: intent.prepared.contentHash,
+        });
+        this.statusText = `《${prepared.title}》草稿已创建并回读验证：${result.draftMediaId}`;
+        new Notice(`《${prepared.title}》草稿已创建，${result.uploadedImageCount} 张正文图片已核验。`);
+      }
     } catch (error) {
       if (error instanceof DraftCreatedVerificationError) {
         this.statusText = `草稿 ${error.draftMediaId} 已返回，但回读未通过；请先核对草稿箱，勿直接重试`;

@@ -379,6 +379,17 @@ export class DedicatedChromeController {
     return CdpSession.connect(target.webSocketDebuggerUrl, signal);
   }
 
+  async openFreshPage(url: string, signal: AbortSignal): Promise<CdpSession> {
+    await this.ensureEndpoint(signal);
+    const response = await requestLocalChrome(`${this.endpoint}/json/new?${encodeURIComponent(url)}`, 'PUT', signal);
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`专用 Chrome 无法创建编辑页（${response.status}）。`);
+    }
+    const target = JSON.parse(response.body) as { webSocketDebuggerUrl?: string };
+    if (!target.webSocketDebuggerUrl) throw new Error('专用 Chrome 没有返回可控制的编辑页。');
+    return CdpSession.connect(target.webSocketDebuggerUrl, signal);
+  }
+
   async waitForWechatImageComposer(signal: AbortSignal): Promise<CdpSession | null> {
     await this.ensureEndpoint(signal);
     for (let attempt = 0; attempt < 20; attempt += 1) {

@@ -450,7 +450,7 @@ export class AiluSettingTab extends PluginSettingTab {
     const section = containerEl.createDiv({ cls: 'ailu-settings-section' });
     new Setting(section)
       .setName('公众号草稿')
-      .setDesc('预览与检查完全在本机完成；只有你在创作台确认后，才会通过中转创建草稿。')
+      .setDesc('预览与检查完全在本机完成；只有你在创作台确认后，才会通过所选通道创建草稿。')
       .setHeading();
 
     new Setting(section)
@@ -504,12 +504,14 @@ export class AiluSettingTab extends PluginSettingTab {
 
     new Setting(section)
       .setName('草稿通道')
-      .setDesc('连接你自行部署的 wechat-relay，只创建草稿，不提供群发或正式发布。')
+      .setDesc('专用 Chrome 直接填写公众号后台；自托管中转保留给已部署 wechat-relay 的用户。')
       .addDropdown(dropdown => dropdown
+        .addOption('dedicatedChrome', '专用 Chrome（推荐）')
         .addOption('localRelay', '自托管公众号中转')
         .setValue(publishing.transport)
-        .onChange(async () => {
-          publishing.transport = 'localRelay';
+        .onChange(async value => {
+          publishing.transport = value === 'localRelay' ? 'localRelay' : 'dedicatedChrome';
+          publishing.transportMigrationVersion = 1;
           await this.deps.saveSettings();
           this.deps.refreshViews();
         }));
@@ -689,7 +691,7 @@ export class AiluSettingTab extends PluginSettingTab {
     const safety = containerEl.createDiv({ cls: 'ailu-settings-section ailu-safety-note' });
     new Setting(safety).setName('不可关闭的安全步骤').setHeading();
     safety.createEl('p', {
-      text: '公众号和 X 每次上传前都会重新检查正文与全部图片，弹出最终确认，并在创建草稿后回读核验。公众号不按正文图片数量设置额外提醒或阻断；X 正文超过 25 张时会直接显示超出的数量并停止创建草稿。封面单独上传、不占 X 正文名额。插件没有群发或正式发布入口。',
+      text: '公众号和 X 每次上传前都会重新检查正文与全部图片并弹出最终确认。公众号专用 Chrome 会核对编辑器和保存结果；中转通道与 X 会在创建草稿后回读核验。公众号不按正文图片数量设置额外提醒或阻断；X 正文超过 25 张时会直接显示超出的数量并停止创建草稿。封面单独上传、不占 X 正文名额。插件没有群发或正式发布入口。',
     });
   }
 

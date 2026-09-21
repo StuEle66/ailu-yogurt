@@ -2,7 +2,7 @@
 
 ## 此定制仓库
 
-本仓库为 Ailu 的个人改进分支，版本 `0.5.3`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪、从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流、13 个创作 Skill 快捷入口、宽高共同适配的整卡预览、编辑刷新保页、Codex 图片事件和重连反馈修复，以及填入小红书与微信贴图编辑器的图文工作流。0.5.3 将“图文草稿”改为独立照片工作区：可从系统文件窗口或拖放导入多张照片，左右预览、排序、设首图并填写标题、文案和话题，再将同一份冻结内容填入小红书与微信贴图后台；照片和当前预览不再随 Markdown 文章切换。旧的按文章照片草稿仍可复制恢复，原数据不会删除。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
+本仓库为 Ailu 的个人改进分支，版本 `0.5.4`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪、从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流、13 个创作 Skill 快捷入口、宽高共同适配的整卡预览、编辑刷新保页、Codex 图片事件和重连反馈修复，以及填入小红书与微信贴图编辑器的图文工作流。0.5.4 修复微信贴图多图被后一次选择替换的问题，并增加通过专用 Chrome 填写公众号长文章、核对后保存草稿的默认通道；已部署的 `wechat-relay` 仍可继续使用。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
 
 上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。功能开发从 `main` 创建独立的 `feat/*` 或 `fix/*` 分支。
 
@@ -94,7 +94,7 @@ npm run deploy:apply -- --vault "/Users/你的用户名/Documents/My Vault"
 
 上面的首次验收只证明 Ailu 核心、Agent 对话和本地预览可用。若要交付给其他人完整使用，还必须按 [《Ailu 完整安装与集成配置》](docs/COMPLETE_SETUP.md)分别完成并验收：
 
-1. Ubuntu 服务器、公众号固定出口 IPv4 白名单、`wechat-relay`、Tailscale Serve 或 Caddy HTTPS，以及 Ailu 中转地址和 Token；
+1. 默认使用专用 Chrome 登录公众号后台；如需 API 中转，再准备 Ubuntu 服务器、固定出口 IPv4 白名单、`wechat-relay`、HTTPS 地址和 Token；
 2. 与当前 Ailu 匹配的 `x-article-draft-uploader`、独立 Python/Playwright 环境、Chrome 登录态与 X Cookie 导入；
 3. `lark-cli` 安装，以及在 Ailu 创作台完成的中国版飞书配置、扫码授权和目标目录选择；
 4. 可选的 Agent Memory Runtime v2 安装与 `memoryctl --actor ailu version --json` 握手。
@@ -139,15 +139,16 @@ npm run deploy:plan -- --vault "/Users/你的用户名/Documents/My Vault"
 - Codex 模型和推理强度从本机 App Server 动态读取；支持模型实际提供的 `low`、`medium`、`high`、`xhigh`、`max`、`ultra` 六档。
 - 本地对话和内联编辑直接调用用户已安装的 Agent CLI。Claude Code 与 Codex 的“完全访问”默认关闭；只有用户在对应设置中明确开启后，普通对话才会请求高权限运行。Plan 模式始终保持只规划。
 
-### 草稿工作台
+### 创作台
 
 - 当前 Markdown 自动生成公众号本地预览，并可复制排版 HTML。
 - 公众号内置 8 套确定性本地模板：纸墨编辑风、柔彩手记、开放设计档案、靛蓝羊皮纸、三色编辑部、黑粉手写体、蜜桃玩字和彩色胶囊；模板旁可独立选择正文字体与 14–20px 字号，默认使用纸墨楷宋 17px，也可改为跟随模板。
 - 上传前移除重复标题和封面、清理危险列表结构、逐张检查图片并把超限正文图压缩到 1 MB 以内。
-- 只通过用户自行部署的 [`wechat-relay`](https://github.com/mcncarl/wechat-relay) 创建公众号草稿；每次都需要最终确认，并在创建后回读核验。
+- 默认通过专用 Chrome 填写公众号长文章并保存草稿；每次都需要最终确认，保存前核对标题、正文和图片，不提供群发或正式发布入口。
+- 已部署 [`wechat-relay`](https://github.com/mcncarl/wechat-relay) 的用户可继续选择 API 中转，并在创建后回读核验。
 - 若创建接口已返回 `media_id` 但回读失败，工作台会保留该 ID 并提示先人工核对草稿箱；端到端防重复仍要求中转服务持久化处理 `Idempotency-Key`。
 - 不包含群发和正式发布入口，Agent 也不能绕过确认直接上传。
-- 创作台通过同一行的“公众号 / 小红书 / 飞书 / X 文章”切换目标，不增加新的侧边栏标签或 Ribbon 入口。
+- 创作台通过同一行的“公众号 / 小红书图卡 / 图文草稿 / 飞书 / X 文章”切换目标，不增加新的侧边栏标签或 Ribbon 入口。
 - 小红书模式把当前 Markdown 生成为 3:4 图片卡片，保留 MDFlow 的模板、字体、头像、账号资料、封面、自动分页与 `---` 手动分页；支持下载当前页 PNG 和按预览顺序导出全部页面 ZIP。第一次打开会只读导入 `yogurt-mdflow` 的小红书设置，旧插件和旧设置不会被改写。
 - 飞书模式复用用户独立安装的 `lark-cli`，只申请文档创建、读取、覆盖更新、图片上传，以及云盘文件夹和知识库节点的目录只读权限；不会读取消息、日历或多维表格内容，也不会退出本机共享的飞书登录。
 - 首次创建默认放入个人文档库根目录；“更改”会只读加载云盘文件夹、个人文档库和当前账号可访问的知识库层级，用户可逐级展开并选择，不需要复制链接。该位置只影响新建文档，已关联文档仍在原位置更新并保持链接不变。本地图片按原文位置插入，每次创建或覆盖前均需确认，并在完成后回读验证。
@@ -172,12 +173,12 @@ Ailu 自身和固定模板预览不要求 Ailu 云端账号；Claude Code、Code
 - 创作记忆通过本机 `memoryctl --actor ailu`、`app_id=ailu`、单一实际 `project_id`（用户记忆可用 `global`）、`agent_scope=shared`、`status=active` 限定读取，不扫描完整记忆库，不把对话自动写入长期记忆。默认项目文件是 `项目/Ailu.md`，对应 `project_id=ailu`；每条业务响应要求 `schema_version: 2`。插件启动、设置变更、transition marker 变化或 5 秒 TTL 到期时调用 `memoryctl --actor ailu version --json` 握手，严格要求 `ready=true`、`runtime_api_version=2`、`writer_protocol_version=2`、actor 列表含 `ailu`，并验证 manifest 与全 runtime bundle 的非空 SHA-256 完整性。缓存身份同时绑定 executable realpath、manifest realpath/mtime、transition marker 哈希及 runtime/manifest 完整性哈希。任一检查或业务子命令失败都会禁用正式记忆读写、清空读取缓存并记录本地诊断，同时隐藏不可用的记忆入口；它不会阻断普通对话，也不会绕过 Runtime v2 或复用跨 transition 的缓存结果。
 - Skill 发现只读取本机各 Skill 入口文件的 frontmatter，并由用户从候选列表中挑选；只有用户在对话框明确选中某个 Skill 后，才要求当前 Agent 读取该 Skill 的完整入口与相对引用。依赖未安装插件或当前 Agent 不具备的工具时，由 Agent 明确提示能力限制。用户在当前请求中选择发布或上传类 Skill 时，不再仅因该动作重复确认；目标或内容不明确时仍需澄清。
 - 对话、飞书和 X 的本地预览不会让 MarkdownRenderer 直接读取远程 URL、任意本地路径或未核验的 Vault 资源；已冻结并校验哈希与文件头的图片会转成当前预览专用的 `blob:` URL，其余媒体显示为本地占位符。公众号快照是唯一会主动下载笔记远程图片的预览路径：只允许 HTTPS 443，逐跳重验公开 DNS 地址、响应类型和大小，并把冻结字节交给预览与完整性检查。
-- 只有用户点击“上传到草稿箱”、通过最终确认后，封面、正文图片和文章 HTML 才会发往用户配置的中转地址。
+- 只有用户点击“上传到草稿箱”、通过最终确认后，封面、正文图片和文章 HTML 才会填入专用 Chrome，或发往用户明确选择的中转地址。
 - 只有用户在飞书模式点击“创建飞书文档 / 同步到飞书”并确认后，当前 Markdown 和本地图片才会交给本机 `lark-cli`；文档 ID、链接和内容哈希写入当前笔记的 Ailu frontmatter，用于后续更新与防重复。
 - X 预览主体完全在本机生成。只有用户点击“创建 X 草稿”并通过最终确认后，插件才会启动 Skill 的独立 Playwright 浏览器，把临时 Markdown、已校验的 Vault 内图片和 X Cookie 文件用于草稿填写；不会接管当前 Chrome，也不会点击最终发布。远程媒体在进入 MarkdownRenderer 前会替换为本地占位符，预览和 X 上传预检都不会联网下载它。
 - X Cookie 内容不写入 Vault、插件 `data.json`、日志或 Git，只保存在 `~/.ailu/secrets/x/cookies.json`（目录 `0700`、文件 `0600`）。设置页提供“从 Chrome 导入 / 粘贴 JSON / 选择 JSON”三条路线；用户也可开启“缺失时导出”，仅在 Cookie 不存在、已过期或缺少 `x.com` 的 `auth_token`/`ct0` 时调用 Skill 的 Chrome 导出脚本，可能触发 macOS 钥匙串授权。外部脚本只写私密 staging，Ailu 校验域名、有效期与必需项后才原子替换 canonical 文件。
 - X 上传的单次运行目录、结果 JSON、草稿 URL 和最终截图会保留用于故障核对；插件不会自动删除这些证据。半成品或成功草稿在用户确认已记录链接前会阻止工作台自动切换笔记；受限为 `0600` 的本机日志会保留草稿 URL 与诊断目录以防视图意外关闭，但绝不记录 Cookie 值。
-- 中转 Token 必须由至少 32 个随机字节生成，保存在 Obsidian SecretStorage，不写入 `data.json`；公众号 AppSecret 只存在于用户自己的 `wechat-relay` 服务器，绝不进入 Ailu。插件本身不提供直连公众号接口的降级路径。
+- 中转 Token 必须由至少 32 个随机字节生成，保存在 Obsidian SecretStorage，不写入 `data.json`；公众号 AppSecret 只存在于用户自己的 `wechat-relay` 服务器，绝不进入 Ailu。专用 Chrome 使用独立 Profile 保存公众号登录状态，不读取日常 Chrome Cookie。
 - CC Switch 的代理存活状态通过回环地址 `127.0.0.1:15721` 的 `/health` 和 `/status` 读取；`/status.current_provider` 实际是上一轮模型请求使用的 Provider，不能代表刚完成的界面切换。因此插件只从 `~/.cc-switch/settings.json` 白名单读取 `currentProviderClaude` 和可选的 `claudeConfigDir`，再从该全局目录的 `settings.json` 提取顶层模型与 Haiku / Sonnet / Opus / 子 Agent 等非秘密模型路由字段。当前选择文件不可用时会直接报错，不回退到上一轮请求记录；发送前会复核全局 Provider 与模型路由指纹，并让 Claude Code 只加载用户级 settings，明确排除当前 Vault 的 project/local settings。插件不读取 CC Switch SQLite、鉴权字段或已保存凭证。当前 CC Switch 没有面向外部插件的 Provider 列表/切换 API，因此精确换用其他 Provider 需在 CC Switch 内完成；实际故障转移仍由 CC Switch 决定。
 
 ## 本地存储
@@ -199,7 +200,11 @@ Ailu 的 Vault 命名空间是 `.ailu/`，全局目录是 `~/.ailu/`。对话写
 
 Provider API Key 与公众号中转 Token 保存在 Obsidian SecretStorage，不写入 Vault 或上述普通 JSON 文件。如需改变全局存储位置，使用 `AILU_HOME`。多进程 writer gateway 与 Agent 进程树清理目前只承诺 macOS/POSIX；Windows 因没有等价的已验证 FileShare/LockFileEx 与 Job Object 边界，会 fail-closed 只读启动，不启动 Claude Code/Codex，也不执行对话、行内修改或设置写入。
 
-## 公众号中转
+## 公众号草稿通道
+
+默认通道是专用 Chrome：首次使用时在插件打开的独立浏览器中登录公众号。Ailu 只填写长文章编辑器，并在最终确认后保存草稿；如果保存结果无法确认，会保留页面并要求先人工核对，避免重复草稿。
+
+下面的中转方案是可选的 API 通道，适合已经具备固定公网出口和微信白名单的用户。
 
 公众号接口需要 AppSecret 和稳定的微信白名单出口 IP，因此公开版不提供共享托管中转，也不会把 AppSecret 下放到插件。用户需要自行准备一台具有固定公网 IPv4 的服务器，并把该服务器的实际出口 IP 加入微信公众号后台白名单。服务器可优先选择香港或海外地区，但应结合账号可达性、延迟、当地法规与服务商条款自行决定；域名本身不能替代固定出口 IP。
 

@@ -18,3 +18,4 @@ export {
   normalizePreparedArticleTitle,
 } from './preparedArticleBuilder';
 export * from './types';
+export * from './wechatArticleBrowserAdapter';

@@ -449,6 +449,10 @@ for (const settingsInvariant of [
 }
 
 const deployerSource = fs.readFileSync('scripts/deploy-ailu.mjs', 'utf8');
+requireCondition(
+  deployerSource.includes(`const EXPECTED_VERSION = '${EXPECTED_VERSION}'`),
+  'The canonical Ailu deployer must pin the verified release version.',
+);
 for (const deployInvariant of [
   "import { verifyPublicSourceTree } from './public-source-policy.mjs';",
   "const CANONICAL_PLUGIN_ID = 'ailu'",

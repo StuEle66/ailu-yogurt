@@ -8,6 +8,7 @@ import { verifyPublicSourceTree } from './public-source-policy.mjs';
 
 const CANONICAL_PLUGIN_ID = 'ailu';
 const CANONICAL_VAULT_NAMESPACE = '.ailu';
+const EXPECTED_VERSION = '0.5.5';
 const ARTIFACTS = ['main.js', 'manifest.json', 'styles.css', 'build-attestation.json',
   'assets/fonts/MaShanZheng-Regular.woff2',
   'assets/fonts/MaShanZheng-OFL.txt',
@@ -357,7 +358,7 @@ function readArtifacts(repoRoot) {
   if (!isRecord(attested)
     || attested.schema_version !== 1
     || attested.product !== CANONICAL_PLUGIN_ID
-    || attested.version !== '0.5.4'
+    || attested.version !== EXPECTED_VERSION
     || !Array.isArray(attested.inputs)) {
     throw new Error('Captured build attestation has an unsupported identity or schema.');
   }
@@ -390,8 +391,8 @@ function readArtifacts(repoRoot) {
     throw new Error('Captured build attestation does not match the active Node/esbuild/TypeScript toolchain.');
   }
   const manifest = JSON.parse(result.find(item => item.filename === 'manifest.json').bytes.toString('utf8'));
-  if (manifest.id !== CANONICAL_PLUGIN_ID || manifest.version !== '0.5.4') {
-    throw new Error('Release manifest is not the canonical Ailu 0.5.4 identity.');
+  if (manifest.id !== CANONICAL_PLUGIN_ID || manifest.version !== EXPECTED_VERSION) {
+    throw new Error(`Release manifest is not the canonical Ailu ${EXPECTED_VERSION} identity.`);
   }
   const newestSourceMtime = newestTreeMtime(path.join(repoRoot, 'src'));
   const bundleMtime = fs.statSync(path.join(repoRoot, 'main.js')).mtimeMs;

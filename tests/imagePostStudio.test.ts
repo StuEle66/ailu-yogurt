@@ -40,4 +40,12 @@ describe('image post creator studio', () => {
     expect(imagePostPanel).not.toContain('加入当前 Markdown 图卡');
     expect(imagePostPanel).not.toContain('materializeCards');
   });
+
+  it('routes Photos DNG and HEIC bytes through the unified managed import boundary', () => {
+    expect(imagePostPanel).toContain('.dng,.heic,.heif');
+    expect(imagePostPanel).toContain('workspace.importPhotoSource');
+    expect(imagePostPanel).toContain('convertedFormats.set');
+    expect(imagePostPanel).toContain('已自动转换为 JPEG');
+    expect(imagePostPanel).not.toContain('HEIC 请先从照片应用导出为 JPEG');
+  });
 });

@@ -20,6 +20,12 @@ import {
   type ImagePostHandoffCoordinatorLike,
   type ImagePostHandoffOptions,
 } from './workspaceService';
+import { MacPhotoTranscoder } from './macPhotoTranscoder';
+import {
+  BrowserImagePostPhotoDimensionsReader,
+  ImagePostPhotoNormalizer,
+  type NormalizeImagePostPhotoInput,
+} from './photoImport';
 
 const nodeFileSystem = {
   mkdir: async (directory: string): Promise<void> => { await mkdir(directory, { recursive: true }); },
@@ -42,6 +48,7 @@ const STANDALONE_PHOTO_BACKUP_ID = 'standalone_before_legacy_restore';
 export class ImagePostWorkspaceController {
   private readonly drafts: ImagePostDraftStore;
   private readonly assets: ManagedImagePostAssetStore;
+  private readonly photoNormalizer: ImagePostPhotoNormalizer;
 
   constructor(
     rootDirectory: string,
@@ -50,6 +57,7 @@ export class ImagePostWorkspaceController {
       destination: ImagePostDestination,
       signal: AbortSignal,
     ) => Promise<void>,
+    photoNormalizer?: ImagePostPhotoNormalizer,
   ) {
     this.drafts = new ImagePostDraftStore({
       directory: path.join(rootDirectory, 'drafts'),
@@ -59,6 +67,10 @@ export class ImagePostWorkspaceController {
       rootDirectory: path.join(rootDirectory, 'assets'),
       fileSystem: nodeFileSystem,
       createId: () => randomUUID().replaceAll('-', ''),
+    });
+    this.photoNormalizer = photoNormalizer ?? new ImagePostPhotoNormalizer({
+      transcoder: new MacPhotoTranscoder(),
+      dimensions: new BrowserImagePostPhotoDimensionsReader(),
     });
   }
 
@@ -109,6 +121,22 @@ export class ImagePostWorkspaceController {
 
   importPhotoBytes(input: ImportImagePostPhotoBytesInput) {
     return this.assets.importPhotoBytes(input);
+  }
+
+  async importPhotoSource(input: NormalizeImagePostPhotoInput) {
+    const normalized = await this.photoNormalizer.normalize(input);
+    const material = await this.assets.importPhotoBytes({
+      bytes: normalized.bytes,
+      originalName: normalized.originalName,
+      storageFileName: normalized.storageFileName,
+      width: normalized.width,
+      height: normalized.height,
+    });
+    return {
+      material,
+      converted: normalized.converted,
+      sourceFormat: normalized.sourceFormat,
+    } as const;
   }
 
   importRenderedCard(input: ImportRenderedImagePostCardInput) {

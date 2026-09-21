@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -14,6 +14,7 @@ import {
   ImagePostWorkspaceController,
   legacyImagePostPhotoDraftId,
 } from '../src/imagePost/controller';
+import { ImagePostPhotoNormalizer } from '../src/imagePost/photoImport';
 
 const temporaryDirectories: string[] = [];
 
@@ -25,6 +26,43 @@ afterEach(async () => {
 });
 
 describe('image post workspace controller', () => {
+  test('imports a Photos DNG as a managed JPEG without storing the RAW bytes', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'ailu-photo-import-'));
+    temporaryDirectories.push(root);
+    const dngBytes = Uint8Array.from([
+      0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00,
+      0x01, 0x00,
+      0x12, 0xc6, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x04, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00,
+    ]);
+    const jpegBytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43]);
+    const normalizer = new ImagePostPhotoNormalizer({
+      transcoder: { convertToJpeg: async () => jpegBytes },
+      dimensions: { readDimensions: async () => ({ width: 3072, height: 4096 }) },
+    });
+    const controller = new ImagePostWorkspaceController(root, {
+      handoff: async () => { throw new Error('not used'); },
+    }, undefined, normalizer);
+
+    const imported = await controller.importPhotoSource({
+      bytes: dngBytes,
+      originalName: 'IMG_7715.dng',
+    });
+
+    expect(imported.converted).toBe(true);
+    expect(imported.material).toMatchObject({
+      kind: 'photo',
+      originalName: 'IMG_7715.dng',
+      mimeType: 'image/jpeg',
+      width: 3072,
+      height: 4096,
+    });
+    expect(imported.material.fileName).toMatch(/\.jpg$/u);
+    const managedBytes = await controller.readMaterialBytes(imported.material);
+    expect([...managedBytes]).toEqual([...jpegBytes]);
+    expect(await readdir(path.join(root, 'assets'))).toHaveLength(1);
+  });
+
   test('restores an article draft without deleting it and keeps the prior standalone draft recoverable', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'ailu-photo-draft-'));
     temporaryDirectories.push(root);

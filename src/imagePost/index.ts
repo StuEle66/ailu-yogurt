@@ -37,6 +37,20 @@ export {
   type ImagePostDraftFileSystem,
 } from './draftStore';
 export { ManagedImagePostPreviewStore } from './previewStore';
+export {
+  BrowserImagePostPhotoDimensionsReader,
+  ImagePostPhotoNormalizer,
+  MAX_IMAGE_POST_PHOTO_INPUT_BYTES,
+  assertImagePostPhotoInputSize,
+  importImagePostPhotoFileBatch,
+  readImagePostPhotoFile,
+  type ImagePostPhotoFileBatchResult,
+  type ImagePostPhotoFileLike,
+  type ImagePostPhotoDimensionsReader,
+  type ImagePostPhotoTranscoder,
+  type NormalizedImagePostPhoto,
+  type NormalizeImagePostPhotoInput,
+} from './photoImport';
 
 export type ImagePostMaterial = ImagePostCardMaterial | ImagePostPhotoMaterial;
 

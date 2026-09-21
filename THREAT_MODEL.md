@@ -20,6 +20,7 @@ Ailu is a local Obsidian plugin that orchestrates user-installed Claude Code or 
 5. **X.** The uploader uses a separate Playwright profile and canonical X cookies. It creates a draft but never clicks final publish.
 6. **WeChat relay.** Article HTML and images leave the Mac only after confirmation and travel to the user's own `wechat-relay`. The AppSecret stays on that server. Ailu does not offer a shared relay.
 7. **Image-post browser handoff.** A dedicated Chrome profile stores Xiaohongshu and WeChat web login state. Ailu can upload the frozen image set and fill copy after an explicit handoff, but it exposes no final-publish operation and preserves uncertain pages for inspection.
+8. **macOS photo conversion.** Photos DNG, HEIC, and HEIF bytes are passed only to the fixed system executable `/usr/bin/sips`. Ailu does not use a shell, network converter, downloaded binary, or user-controlled executable path. The source copy lives in a private, owner-checked, per-run temporary directory and is removed after success, failure, cancellation, or timeout. Stale cleanup only removes old directories bearing Ailu's exact ownership marker beneath its private temporary root. `/usr/bin/sips` is part of macOS and is not bundled or relicensed by Ailu.
 
 ## Principal controls
 
@@ -30,6 +31,7 @@ Ailu is a local Obsidian plugin that orchestrates user-installed Claude Code or 
 - canonical cookie directories reject symlinks, require private permissions, and accept only valid, unexpired X login cookies;
 - Provider URLs are canonicalized, public HTTP is rejected, and invalid legacy profiles are quarantined from execution;
 - attachment and publishing paths must remain beneath an authorized Vault root and may not traverse symlinks; Agent image inputs are copied from verified open-file bytes into private, content-addressed Ailu Home files and revalidated before runtime use;
+- image-post imports reject empty or oversized files before reading their bytes, verify source signatures, bound macOS conversion to 90 seconds and 4096 pixels on the long edge, validate the resulting JPEG, and persist only the converted managed copy;
 - chat, Feishu and X Markdown previews accept only frozen, verified media exposed through managed short-lived object URLs; the WeChat-only remote-image fetcher permits HTTPS port 443 and revalidates public DNS addresses, redirects, size and media type;
 - remote-image work has one absolute deadline across DNS, redirects and response streaming; runtime output and generated artifacts are bounded by per-event, per-turn, item-count, byte and concurrency limits before Vault side effects;
 - publishing confirmation binds the exact source hashes, rendered/prepared content, preflight evidence, destination, and token fingerprint;

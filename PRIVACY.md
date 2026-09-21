@@ -11,6 +11,7 @@ Ailu is local-first, but it coordinates tools that can use network services. Thi
 - content-addressed image attachment copies in `~/.ailu/frozen-attachments/`, created from already verified Vault bytes before an Agent turn and protected by private directory/file permissions;
 - runtime caches and bounded logs under `~/.ailu/`;
 - recoverable image-post draft metadata, managed photo/card copies, and a dedicated Chrome profile under `~/.ailu/image-post/` and `~/.ailu/browser-profiles/image-post/`;
+- when importing DNG, HEIC, or HEIF on macOS, one private temporary source copy exists only while `/usr/bin/sips` creates a managed JPEG; Ailu removes that source copy after success, failure, cancellation, or timeout and stores only the converted JPEG under `~/.ailu/image-post/assets/`;
 - Feishu authorization metadata without the CLI's credentials;
 - frontmatter links and hashes needed to update previously created drafts/documents.
 

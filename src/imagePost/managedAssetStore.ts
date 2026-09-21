@@ -23,6 +23,7 @@ export interface ImportImagePostPhotoInput {
 export interface ImportImagePostPhotoBytesInput {
   bytes: Uint8Array;
   originalName: string;
+  storageFileName?: string;
   width: number;
   height: number;
 }
@@ -56,7 +57,7 @@ export class ManagedImagePostAssetStore {
   }
 
   async importPhotoBytes(input: ImportImagePostPhotoBytesInput): Promise<ImagePostPhotoMaterial> {
-    const format = photoFormat(input.originalName);
+    const format = photoFormat(input.storageFileName ?? input.originalName);
     assertPhotoSignature(input.bytes, format.mimeType);
     if (!Number.isFinite(input.width) || input.width <= 0
       || !Number.isFinite(input.height) || input.height <= 0) {

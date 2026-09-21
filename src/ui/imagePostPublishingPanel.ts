@@ -4,6 +4,7 @@ import { Notice, setIcon, type App, type TFile } from 'obsidian';
 
 import {
   addImagePostMaterial,
+  importImagePostPhotoFileBatch,
   ManagedImagePostPreviewStore,
   moveImagePostMaterial,
   prepareImagePost,
@@ -16,6 +17,7 @@ import {
   setImagePostLeadMaterial,
   setImagePostSelectedCardPages,
   updateSharedImagePostCopy,
+  readImagePostPhotoFile,
   type ImagePostCopy,
   type ImagePostDestination,
   type ImagePostDraft,
@@ -262,7 +264,7 @@ export class ImagePostPublishingPanel {
       });
       setIcon(empty.createSpan(), 'images');
       empty.createEl('strong', { text: '选择或拖入照片' });
-      empty.createSpan({ text: '支持 JPEG、PNG、WebP，可一次选择多张' });
+      empty.createSpan({ text: '支持 JPEG、PNG、WebP、DNG、HEIC，可一次选择多张' });
       empty.onclick = () => void this.choosePhotos();
       return;
     }
@@ -508,7 +510,7 @@ export class ImagePostPublishingPanel {
 
   private async choosePhotos(): Promise<void> {
     const input = document.body.createEl('input', { type: 'file' });
-    input.accept = 'image/jpeg,image/png,image/webp,.heic,.heif'; input.multiple = true; input.hidden = true;
+    input.accept = 'image/jpeg,image/png,image/webp,.dng,.heic,.heif'; input.multiple = true; input.hidden = true;
     input.onchange = () => { const files = input.files; input.remove(); void this.importFiles(files); };
     input.oncancel = () => input.remove();
     input.click();
@@ -517,7 +519,7 @@ export class ImagePostPublishingPanel {
   private async chooseReplacement(materialId: string): Promise<void> {
     if (!this.draft || this.busy) return;
     const input = document.body.createEl('input', { type: 'file' });
-    input.accept = 'image/jpeg,image/png,image/webp,.heic,.heif';
+    input.accept = 'image/jpeg,image/png,image/webp,.dng,.heic,.heif';
     input.hidden = true;
     input.onchange = () => {
       const file = input.files?.[0];
@@ -537,17 +539,16 @@ export class ImagePostPublishingPanel {
     this.error = '';
     this.deps.requestRender();
     try {
-      const material = await this.deps.workspace.importPhotoBytes({
-        bytes: new Uint8Array(await file.arrayBuffer()),
-        originalName: file.name,
-        ...await imageDimensions(file),
-      });
+      const result = await this.deps.workspace.importPhotoSource(await readImagePostPhotoFile(file));
+      const material = result.material;
       const next = replaceImagePostMaterial(this.draft, materialId, material);
       this.previewStore.release(materialId);
       this.materialPreviews.delete(materialId);
       this.draft = next;
       await this.deps.workspace.saveDraft(next);
-      this.status = '已替换无法读取的素材。';
+      this.status = result.converted
+        ? '已转换并替换照片，原始照片没有修改。'
+        : '已替换无法读取的素材。';
     } catch (error) {
       this.error = error instanceof Error ? error.message : '重新选择图片失败。';
     } finally {
@@ -561,26 +562,28 @@ export class ImagePostPublishingPanel {
     this.busy = true; this.status = '正在复制照片到 .ailu 受管目录…'; this.error = ''; this.deps.requestRender();
     try {
       let next = this.draft;
-      let imported = 0;
-      const failures: string[] = [];
-      for (const file of Array.from(files)) {
-        try {
-          const dimensions = await imageDimensions(file);
-          const material = await this.deps.workspace.importPhotoBytes({
-            bytes: new Uint8Array(await file.arrayBuffer()),
-            originalName: file.name,
-            ...dimensions,
-          });
-          next = addImagePostMaterial(next, material);
-          imported += 1;
-        } catch (error) {
-          failures.push(error instanceof Error ? error.message : `“${file.name}”导入失败。`);
+      const batch = await importImagePostPhotoFileBatch(
+        Array.from(files),
+        input => this.deps.workspace.importPhotoSource(input),
+      );
+      const convertedFormats = new Map<string, number>();
+      for (const { result } of batch.imported) {
+        next = addImagePostMaterial(next, result.material);
+        if (result.converted) {
+          const label = result.sourceFormat.toUpperCase();
+          convertedFormats.set(label, (convertedFormats.get(label) ?? 0) + 1);
         }
       }
+      const imported = batch.imported.length;
       this.draft = next;
       if (imported) await this.deps.workspace.saveDraft(next);
-      this.status = imported ? `已加入 ${imported} 张照片。` : '';
-      if (failures.length) this.error = failures.join(' ');
+      const convertedSummary = [...convertedFormats]
+        .map(([format, count]) => `${count} 张 ${format}`)
+        .join('、');
+      this.status = imported
+        ? `已加入 ${imported} 张照片${convertedSummary ? `，其中 ${convertedSummary} 已自动转换为 JPEG` : ''}。`
+        : '';
+      if (batch.failures.length) this.error = batch.failures.join(' ');
     } catch (error) { this.error = error instanceof Error ? error.message : '照片导入失败。'; }
     finally { this.busy = false; if (!this.disposed) this.deps.requestRender(); }
   }
@@ -758,14 +761,4 @@ function destinationName(destination: ImagePostDestination): string {
 
 function imagePostLimit(destination: ImagePostDestination): number {
   return destination === 'rednote' ? 18 : 20;
-}
-
-async function imageDimensions(file: File): Promise<{ width: number; height: number }> {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image(); image.src = url; await image.decode();
-    if (!image.naturalWidth || !image.naturalHeight) throw new Error('图片尺寸无效。');
-    return { width: image.naturalWidth, height: image.naturalHeight };
-  } catch { throw new Error(`图片“${file.name}”无法解码；HEIC 请先从照片应用导出为 JPEG。`); }
-  finally { URL.revokeObjectURL(url); }
 }

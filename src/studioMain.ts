@@ -944,6 +944,7 @@ export default class AiluPlugin extends Plugin {
       this.legacyXCookiesPath,
       this.canonicalXCookiesVerified,
     );
+    canonical.publishing = this.settings.publishing;
     const replacement = `${JSON.stringify(canonical, null, 2)}\n`;
     if (currentRaw === replacement) return;
     const result = await this.vaultStore.compareAndSwapExternalText(

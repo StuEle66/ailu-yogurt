@@ -2,7 +2,7 @@
 
 ## 此定制仓库
 
-本仓库为 Ailu 的个人改进分支，版本 `0.5.4`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪、从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流、13 个创作 Skill 快捷入口、宽高共同适配的整卡预览、编辑刷新保页、Codex 图片事件和重连反馈修复，以及填入小红书与微信贴图编辑器的图文工作流。0.5.4 修复微信贴图多图被后一次选择替换的问题，并增加通过专用 Chrome 填写公众号长文章、核对后保存草稿的默认通道；已部署的 `wechat-relay` 仍可继续使用。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
+本仓库为 Ailu 的个人改进分支，版本 `0.5.5`，基于 [mcncarl/ailu](https://github.com/mcncarl/ailu) 的提交 `8a232fe082163c5898038cca7bcf26cb1956b9a2`。当前定制包含公众号受管预览图片复制、独立封面选择与裁剪、从固定 MDFlow 基线迁入的小红书 3:4 图卡工作流、13 个创作 Skill 快捷入口、宽高共同适配的整卡预览、编辑刷新保页、Codex 图片事件和重连反馈修复，以及填入小红书与微信贴图编辑器的图文工作流。0.5.5 支持从 Mac 照片 App 或文件选择器导入 DNG、HEIC 和 HEIF，使用 macOS 系统工具在本机生成最长边不超过 4096px、质量 92 的受管 JPEG；原片不会被修改或保存在 Ailu 草稿中。插件身份仍为 `ailu`，沿用现有 `.ailu` 会话和配置。此版本是定制构建；下方官方 `0.2.0` 下载链接保留用于原版体验和回退。
 
 上游作者与许可证保持不变，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。项目协作及数据保护规则见根目录 [AGENTS.md](AGENTS.md)。个人仓库为 [StuEle66/ailu-yogurt](https://github.com/StuEle66/ailu-yogurt)，本地远程名为 `origin`；上游远程名为 `upstream`。功能开发从 `main` 创建独立的 `feat/*` 或 `fix/*` 分支。
 
@@ -103,7 +103,7 @@ npm run deploy:apply -- --vault "/Users/你的用户名/Documents/My Vault"
 
 ### 图文后台填充
 
-创作台的「图文」页可以把当前 Markdown 渲染成 3:4 图卡，也可以选择或拖入 JPEG、PNG、WebP 照片。素材会复制到 `~/.ailu/image-post/`，草稿只保存受管路径、哈希、排序、首图和文案元数据；移除素材不会删除原图。
+创作台把「小红书图卡」和「图文草稿」分为两个入口。图文草稿可从系统文件窗口多选，或从 Finder、Mac 照片 App 拖入 JPEG、PNG、WebP、DNG、HEIC、HEIF 照片。DNG／HEIC／HEIF 会在本机通过固定的 `/usr/bin/sips` 自动转换成高质量 JPEG，保持方向和比例，最长边不超过 4096px；原片不修改。转换后的素材复制到 `~/.ailu/image-post/assets/`，草稿只保存受管路径、哈希、排序、首图和文案元数据；移除素材不会删除原图。
 
 点击「填入所选后台」后，Ailu 使用 `~/.ailu/browser-profiles/image-post/` 中的专用 Chrome 登录态，分别打开小红书图文编辑器和微信公众号图片消息编辑器，上传冻结的图片顺序并填写标题、文案和话题。第一次使用需在该 Chrome 窗口中分别登录。Ailu 会停在可检查的编辑页，不提供最终发布动作；验证码、登录失效、页面变化或上传开始后的中断会保留现场并要求人工核对。
 

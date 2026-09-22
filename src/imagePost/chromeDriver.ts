@@ -8,6 +8,7 @@ import type {
   ImagePostBrowserDriver,
   ImagePostComposerState,
   ImagePostDestination,
+  ImagePostOpeningStage,
   ImagePostVerification,
 } from './adapters';
 
@@ -85,32 +86,75 @@ export function buildWechatImageComposerUrl(homeUrl: string): string | null {
 
 export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
   private session: CdpSession | null = null;
+  private reconnectAttempts = 0;
 
   constructor(
     private readonly destination: ImagePostDestination,
     private readonly chrome: DedicatedChromeController,
   ) {}
 
-  async openEditor(destination: ImagePostDestination, signal: AbortSignal): Promise<void> {
+  async openEditor(
+    destination: ImagePostDestination,
+    signal: AbortSignal,
+    onStage?: (stage: ImagePostOpeningStage) => void,
+  ): Promise<void> {
     if (destination !== this.destination) throw new Error('图文浏览器目标不匹配。');
     if (signal.aborted) throw abortError();
+    this.reconnectAttempts = 0;
+    try {
+      await this.openEditorOnce(signal, onStage);
+    } catch (error) {
+      if (!this.canReconnect(error, signal)) throw error;
+      this.reconnectAttempts += 1;
+      this.session?.close();
+      this.session = null;
+      await this.openEditorOnce(signal, onStage);
+    }
+  }
+
+  private async openEditorOnce(signal: AbortSignal, onStage?: (stage: ImagePostOpeningStage) => void): Promise<void> {
+    onStage?.('connecting-browser');
     if (this.session && !await this.session.isHealthy()) {
       this.session.close();
       this.session = null;
     }
     if (!this.session) {
-      this.session = await this.chrome.openPage(imagePostBrowserProfile(destination).editorUrl, signal);
+      this.session = await this.chrome.openPage(imagePostBrowserProfile(this.destination).editorUrl, signal);
       await this.session.send('Page.enable');
-      await delay(1_200, signal);
+      if (this.destination !== 'wechat-image') await delay(1_200, signal);
     }
-    if (destination === 'wechat-image') await this.openWechatImageComposerIfAvailable(signal);
+    if (this.destination === 'wechat-image') await this.openWechatImageComposer(signal, onStage);
   }
 
-  async inspectEditor(signal: AbortSignal): Promise<ImagePostComposerState> {
-    return waitForImagePostComposerState(
-      async () => classifyImagePostComposerSnapshot(await this.snapshot(signal)),
-      async () => delay(500, signal),
-    );
+  async inspectEditor(signal: AbortSignal, onStage?: (stage: ImagePostOpeningStage) => void): Promise<ImagePostComposerState> {
+    onStage?.('waiting-editor');
+    try {
+      return await waitForImagePostComposerState(
+        async () => {
+          const snapshot = await this.snapshot(signal);
+          const state = classifyImagePostComposerSnapshot(snapshot);
+          if (this.destination === 'wechat-image' && state !== 'login-required' && state !== 'captcha-required') {
+            try {
+              if (!isWechatImageComposerUrl(new URL(snapshot.url))) return 'page-changed';
+            } catch { return 'page-changed'; }
+          }
+          return state;
+        },
+        async () => delay(500, signal),
+      );
+    } catch (error) {
+      if (!this.canReconnect(error, signal)) throw error;
+      this.reconnectAttempts += 1;
+      this.session?.close();
+      this.session = null;
+      await this.openEditorOnce(signal, onStage);
+      return this.inspectEditor(signal, onStage);
+    }
+  }
+
+  private canReconnect(error: unknown, signal: AbortSignal): boolean {
+    return this.destination === 'wechat-image' && !signal.aborted && this.reconnectAttempts < 1
+      && error instanceof Error && /连接已断开|无法连接专用 Chrome|Chrome 调用超时/u.test(error.message);
   }
 
   async uploadImages(
@@ -197,21 +241,29 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
     return snapshot.uploadedImageCount >= post.images.length ? 'matched' : 'indeterminate';
   }
 
-  private async openWechatImageComposerIfAvailable(signal: AbortSignal): Promise<void> {
-    const snapshot = await this.snapshot(signal);
-    if (/扫码登录|登录公众平台/u.test(snapshot.text)) return;
-    try {
-      if (isWechatImageComposerUrl(new URL(snapshot.url))) return;
-    } catch {
-      throw new Error('微信贴图后台返回了无法识别的页面地址。');
+  private async openWechatImageComposer(signal: AbortSignal, onStage?: (stage: ImagePostOpeningStage) => void): Promise<void> {
+    onStage?.('waiting-home');
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      const snapshot = await this.snapshot(signal);
+      if (/扫码登录|登录公众平台|手机验证码|安全验证|拖动滑块/u.test(snapshot.text)
+        || /login|passport/u.test(snapshot.url)) return;
+      let current: URL;
+      try { current = new URL(snapshot.url); }
+      catch { throw new Error('微信贴图后台返回了无法识别的页面地址。'); }
+      if (isWechatImageComposerUrl(current)) return;
+      const composerUrl = buildWechatImageComposerUrl(snapshot.url);
+      if (composerUrl && snapshot.readyState !== 'loading') {
+        onStage?.('opening-editor');
+        const composer = await this.chrome.openPage(composerUrl, signal);
+        this.session?.close();
+        this.session = composer;
+        await composer.send('Page.enable');
+        return;
+      }
+      await delay(500, signal);
     }
-    const composerUrl = buildWechatImageComposerUrl(snapshot.url);
-    if (!composerUrl) return;
-    const composer = await this.chrome.openPage(composerUrl, signal);
-    this.session?.close();
-    this.session = composer;
-    await composer.send('Page.enable');
-    await delay(500, signal);
+    throw new Error('微信主页加载超时，未取得已登录会话地址；尚未上传图片，可检查登录后重试。');
   }
 
   private async fillField(selectors: readonly string[], value: string, signal: AbortSignal): Promise<void> {
@@ -231,7 +283,7 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
   }
 
   private async snapshot(signal: AbortSignal): Promise<{
-    url: string; text: string; fileInputCount: number; uploadedImageCount: number;
+    url: string; readyState: string; text: string; fileInputCount: number; uploadedImageCount: number;
     hasTitle: boolean; hasBody: boolean; hasContent: boolean; title: string; body: string;
   }> {
     if (signal.aborted) throw abortError();
@@ -248,6 +300,7 @@ export class DedicatedChromeImagePostDriver implements ImagePostBrowserDriver {
       const body = read(${JSON.stringify(profile.bodySelectors)});
       return {
         url: location.href,
+        readyState: document.readyState,
         text: (document.body?.innerText || '').slice(0, 20000),
         fileInputCount: document.querySelectorAll('input[type="file"]').length,
         uploadedImageCount: document.querySelectorAll(${JSON.stringify(profile.uploadedImageSelector)}).length,
@@ -674,9 +727,14 @@ function abortError(): Error {
 }
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(abortError());
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, milliseconds);
-    signal.addEventListener('abort', () => { clearTimeout(timer); reject(abortError()); }, { once: true });
+    const abort = (): void => { clearTimeout(timer); reject(abortError()); };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener('abort', abort, { once: true });
   });
 }
 

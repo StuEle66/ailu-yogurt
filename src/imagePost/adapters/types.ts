@@ -55,8 +55,8 @@ export type ImagePostAdapterOutcome =
   };
 
 export interface ImagePostBrowserDriver {
-  openEditor(destination: ImagePostDestination, signal: AbortSignal): Promise<void>;
-  inspectEditor(signal: AbortSignal): Promise<ImagePostComposerState>;
+  openEditor(destination: ImagePostDestination, signal: AbortSignal, onStage?: (stage: ImagePostOpeningStage) => void): Promise<void>;
+  inspectEditor(signal: AbortSignal, onStage?: (stage: ImagePostOpeningStage) => void): Promise<ImagePostComposerState>;
   uploadImages(
     paths: readonly string[],
     signal: AbortSignal,
@@ -68,6 +68,8 @@ export interface ImagePostBrowserDriver {
   verifyContent(post: ImagePostAdapterInput, signal: AbortSignal): Promise<ImagePostVerification>;
 }
 
+export type ImagePostOpeningStage = 'connecting-browser' | 'waiting-home' | 'opening-editor' | 'waiting-editor';
+
 export interface PrepareImagePostEditorOptions {
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: ImagePostAdapterProgress) => void;
@@ -78,6 +80,7 @@ export interface ImagePostAdapterProgress {
   readonly destination: ImagePostDestination;
   readonly stage:
     | 'opening'
+    | ImagePostOpeningStage
     | 'waiting-login'
     | 'uploading'
     | 'filling-title'

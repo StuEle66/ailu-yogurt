@@ -4,6 +4,7 @@ import type {
   ImagePostBrowserDriver,
   ImagePostDestination,
   ImagePostDestinationAdapter,
+  ImagePostOpeningStage,
   PrepareImagePostEditorOptions,
 } from './types';
 import { userFacingErrorMessage } from '../../utils/userFacingError';
@@ -24,9 +25,18 @@ export class BrowserImagePostDestinationAdapter implements ImagePostDestinationA
     try {
       if (signal.aborted) return this.cancelledOutcome();
       this.progress(options, 'opening', `正在打开${this.destinationName()}后台…`);
-      await this.driver.openEditor(this.destination, signal);
+      const openingStage = (stage: ImagePostOpeningStage): void => {
+        const messages: Record<ImagePostOpeningStage, string> = {
+          'connecting-browser': '正在连接专用 Chrome…',
+          'waiting-home': '正在等待微信主页加载及登录状态…',
+          'opening-editor': '正在打开微信贴图编辑器…',
+          'waiting-editor': '正在等待微信贴图上传和文案控件…',
+        };
+        this.progress(options, stage, messages[stage]);
+      };
+      await this.driver.openEditor(this.destination, signal, openingStage);
       if (signal.aborted) return this.cancelledOutcome();
-      const state = await this.driver.inspectEditor(signal);
+      const state = await this.driver.inspectEditor(signal, openingStage);
       if (signal.aborted) return this.cancelledOutcome();
       if (state === 'login-required') {
         this.progress(options, 'waiting-login', `等待登录${this.destinationName()}…`);

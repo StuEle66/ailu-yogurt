@@ -12,6 +12,7 @@ import {
   classifyImagePostComposerSnapshot,
   CdpSession,
   DedicatedChromeController,
+  DedicatedChromeImagePostDriver,
   imagePostBrowserProfile,
   planImagePostUploadBatches,
   selectWechatImageComposerTarget,
@@ -22,10 +23,122 @@ import {
 } from '../src/imagePost/chromeDriver';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe('image post Chrome driver', () => {
+  it('waits for a delayed authenticated home page before opening the WeChat image composer', async () => {
+    const homeUrl = 'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&token=test';
+    const composerUrl = buildWechatImageComposerUrl(homeUrl);
+    let homeReads = 0;
+    const session = (url: string) => ({
+      close: vi.fn(),
+      isHealthy: vi.fn(async () => true),
+      send: vi.fn(async (method: string) => method === 'Runtime.evaluate'
+        ? { result: { value: {
+          url: url === 'home' ? (++homeReads < 2 ? 'about:blank' : homeUrl) : composerUrl,
+          readyState: url === 'home' && homeReads < 3 ? 'loading' : 'complete',
+          text: '', fileInputCount: url === 'home' ? 0 : 2,
+          uploadedImageCount: 0, hasTitle: url !== 'home', hasBody: url !== 'home',
+          hasContent: false, title: '', body: '',
+        } } }
+        : {}),
+    });
+    const chrome = {
+      openPage: vi.fn(async (url: string) => session(url === 'https://mp.weixin.qq.com/' ? 'home' : 'composer')),
+    };
+    const driver = new DedicatedChromeImagePostDriver(
+      'wechat-image', chrome as unknown as DedicatedChromeController,
+    );
+
+    await driver.openEditor('wechat-image', new AbortController().signal);
+    expect(chrome.openPage).toHaveBeenCalledWith(composerUrl, expect.any(AbortSignal));
+    expect(homeReads).toBe(3);
+    await expect(driver.inspectEditor(new AbortController().signal)).resolves.toBe('empty');
+  });
+
+  it('reconnects once before upload when an old WeChat tab loses its CDP connection', async () => {
+    const homeUrl = 'https://mp.weixin.qq.com/cgi-bin/home?token=test';
+    const composerUrl = buildWechatImageComposerUrl(homeUrl);
+    const disconnected = {
+      close: vi.fn(), isHealthy: vi.fn(async () => false),
+      send: vi.fn(async (method: string) => {
+        if (method === 'Runtime.evaluate') throw new Error('专用 Chrome 连接已断开。');
+        return {};
+      }),
+    };
+    const healthy = (url: string) => ({
+      close: vi.fn(), isHealthy: vi.fn(async () => true),
+      send: vi.fn(async (method: string) => method === 'Runtime.evaluate'
+        ? { result: { value: {
+          url, text: '', fileInputCount: url === homeUrl ? 0 : 2,
+          uploadedImageCount: 0, hasTitle: url !== homeUrl, hasBody: url !== homeUrl,
+          hasContent: false, title: '', body: '',
+        } } } : {}),
+    });
+    const chrome = { openPage: vi.fn()
+      .mockResolvedValueOnce(disconnected)
+      .mockResolvedValueOnce(healthy(homeUrl))
+      .mockResolvedValueOnce(healthy(composerUrl!)) };
+    const driver = new DedicatedChromeImagePostDriver('wechat-image', chrome as unknown as DedicatedChromeController);
+    await driver.openEditor('wechat-image', new AbortController().signal);
+    expect(chrome.openPage).toHaveBeenCalledTimes(3);
+    expect(disconnected.close).toHaveBeenCalledOnce();
+    await expect(driver.inspectEditor(new AbortController().signal)).resolves.toBe('empty');
+  });
+
+  it('treats an existing WeChat image composer with content as occupied and never opens another page', async () => {
+    const composerUrl = buildWechatImageComposerUrl('https://mp.weixin.qq.com/cgi-bin/home?token=test');
+    const chrome = { openPage: vi.fn(async () => ({
+      close: vi.fn(), isHealthy: vi.fn(async () => true),
+      send: vi.fn(async (method: string) => method === 'Runtime.evaluate'
+        ? { result: { value: {
+          url: composerUrl, text: '', fileInputCount: 2, uploadedImageCount: 1,
+          hasTitle: true, hasBody: true, hasContent: true, title: '已有标题', body: '已有正文',
+        } } } : {}),
+    })) };
+    const driver = new DedicatedChromeImagePostDriver('wechat-image', chrome as unknown as DedicatedChromeController);
+    await driver.openEditor('wechat-image', new AbortController().signal);
+    await expect(driver.inspectEditor(new AbortController().signal)).resolves.toBe('content-present');
+    expect(chrome.openPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops at the WeChat login page without opening a composer or uploading', async () => {
+    const chrome = { openPage: vi.fn(async () => ({
+      close: vi.fn(), isHealthy: vi.fn(async () => true),
+      send: vi.fn(async (method: string) => method === 'Runtime.evaluate'
+        ? { result: { value: {
+          url: 'https://mp.weixin.qq.com/', text: '扫码登录', fileInputCount: 0,
+          uploadedImageCount: 0, hasTitle: false, hasBody: false,
+          hasContent: false, title: '', body: '',
+        } } } : {}),
+    })) };
+    const driver = new DedicatedChromeImagePostDriver('wechat-image', chrome as unknown as DedicatedChromeController);
+    const stages: string[] = [];
+    await driver.openEditor('wechat-image', new AbortController().signal, stage => stages.push(stage));
+    await expect(driver.inspectEditor(new AbortController().signal)).resolves.toBe('login-required');
+    expect(chrome.openPage).toHaveBeenCalledTimes(1);
+    expect(stages).toEqual(['connecting-browser', 'waiting-home']);
+  });
+
+  it('ends an unrecognized WeChat home page wait within the opening deadline', async () => {
+    vi.useFakeTimers();
+    const chrome = { openPage: vi.fn(async () => ({
+      close: vi.fn(), isHealthy: vi.fn(async () => true),
+      send: vi.fn(async (method: string) => method === 'Runtime.evaluate'
+        ? { result: { value: {
+          url: 'about:blank', text: '', fileInputCount: 0, uploadedImageCount: 0,
+          hasTitle: false, hasBody: false, hasContent: false, title: '', body: '',
+        } } } : {}),
+    })) };
+    const driver = new DedicatedChromeImagePostDriver('wechat-image', chrome as unknown as DedicatedChromeController);
+    const operation = driver.openEditor('wechat-image', new AbortController().signal);
+    const assertion = expect(operation).rejects.toThrow('微信主页加载超时');
+    await vi.advanceTimersByTimeAsync(31_000);
+    await assertion;
+    expect(chrome.openPage).toHaveBeenCalledTimes(1);
+  });
   it('opens the authenticated WeChat image composer directly from the home-page token', () => {
     expect(buildWechatImageComposerUrl(
       'https://mp.weixin.qq.com/cgi-bin/home?t=home/index&lang=zh_CN&token=test-token',

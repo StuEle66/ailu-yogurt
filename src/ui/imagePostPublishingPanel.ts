@@ -510,7 +510,7 @@ export class ImagePostPublishingPanel {
 
   private async choosePhotos(): Promise<void> {
     const input = document.body.createEl('input', { type: 'file' });
-    input.accept = 'image/jpeg,image/png,image/webp,.dng,.heic,.heif'; input.multiple = true; input.hidden = true;
+    input.accept = 'image/jpeg,image/png,image/webp,.dng,.DNG,.heic,.HEIC,.heif,.HEIF'; input.multiple = true; input.hidden = true;
     input.onchange = () => { const files = input.files; input.remove(); void this.importFiles(files); };
     input.oncancel = () => input.remove();
     input.click();
@@ -519,7 +519,7 @@ export class ImagePostPublishingPanel {
   private async chooseReplacement(materialId: string): Promise<void> {
     if (!this.draft || this.busy) return;
     const input = document.body.createEl('input', { type: 'file' });
-    input.accept = 'image/jpeg,image/png,image/webp,.dng,.heic,.heif';
+    input.accept = 'image/jpeg,image/png,image/webp,.dng,.DNG,.heic,.HEIC,.heif,.HEIF';
     input.hidden = true;
     input.onchange = () => {
       const file = input.files?.[0];

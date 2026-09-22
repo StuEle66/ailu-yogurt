@@ -42,7 +42,7 @@ describe('image post creator studio', () => {
   });
 
   it('routes Photos DNG and HEIC bytes through the unified managed import boundary', () => {
-    expect(imagePostPanel).toContain('.dng,.heic,.heif');
+    expect(imagePostPanel).toContain('.dng,.DNG,.heic,.HEIC,.heif,.HEIF');
     expect(imagePostPanel).toContain('workspace.importPhotoSource');
     expect(imagePostPanel).toContain('convertedFormats.set');
     expect(imagePostPanel).toContain('已自动转换为 JPEG');
